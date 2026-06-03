@@ -3,6 +3,33 @@ A plugin that gives highly immersive, 3D weather with dynamic weather cycles, da
 
 A fork of https://github.com/ScreteMonge/3D-Weather.
 
+# Gallery
+
+### Rainy/Stormy
+
+![Rain](https://i.imgur.com/rQ5Wa9e.png)
+
+### Snowy
+
+![Snow](https://i.imgur.com/DUsMjVI.png)
+
+### Foggy
+
+![Fog](https://i.imgur.com/M9QG63A.png)
+
+### Ashfall
+
+![Ashfall](https://i.imgur.com/e5GUWoQ.png)
+
+### Starry
+
+![Stars](https://i.imgur.com/SLzokWF.png)
+
+### Cloudy/Partly Cloudy
+
+![Clouds](https://i.imgur.com/9WSINrk.png)
+
+
 ## Changelog (vs. 3D Weather fork)
 
 ### Sky & lighting
@@ -51,32 +78,6 @@ A fork of https://github.com/ScreteMonge/3D-Weather.
 
 ### Misc
 - Smoother stacking for cloud shadows, snow accumulation, and fog (ultra-translucent per-face so overlaps don't expose polygon edges).
-
-# Gallery
-
-### Rainy/Stormy
-
-![Rain](https://i.imgur.com/rQ5Wa9e.png)
-
-### Snowy
-
-![Snow](https://i.imgur.com/DUsMjVI.png)
-
-### Foggy
-
-![Fog](https://i.imgur.com/M9QG63A.png)
-
-### Ashfall
-
-![Ashfall](https://i.imgur.com/e5GUWoQ.png)
-
-### Starry
-
-![Stars](https://i.imgur.com/SLzokWF.png)
-
-### Cloudy/Partly Cloudy
-
-![Clouds](https://i.imgur.com/9WSINrk.png)
 
 
 ### Weather Type & Season Type
