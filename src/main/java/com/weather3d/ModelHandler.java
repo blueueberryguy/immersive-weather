@@ -264,30 +264,28 @@ public class ModelHandler
         ModelData aurora1 = client.loadModelData(FOG_MODEL).cloneVertices().cloneColors().cloneTransparencies();
         ModelData aurora2 = client.loadModelData(FOG_MODEL).cloneVertices().cloneColors().cloneTransparencies();
         ModelData aurora3 = client.loadModelData(FOG_MODEL).cloneVertices().cloneColors().cloneTransparencies();
-        // Aurora hues — saturated mid-luminance so the lighting computation doesn't blow them
-        // out to white. Earlier values (luminance 115+ with ambient 255) saturated to pure
-        // white regardless of hue, which is why aurora previously rendered colourless.
-        short auroraGreen  = JagexColor.packHSL(45, 7, 78);   // vivid green
-        short auroraCyan   = JagexColor.packHSL(35, 6, 80);   // bright cyan
-        short auroraPurple = JagexColor.packHSL(10, 5, 70);   // glowing purple
+        // Aurora hues — max saturation + brighter mid-luminance for dramatic glow. With lower
+        // ambient (40) we have headroom to use higher luminance without clipping to white.
+        short auroraGreen  = JagexColor.packHSL(45, 7, 95);   // brilliant electric green
+        short auroraCyan   = JagexColor.packHSL(33, 6, 100);  // glowing cyan
+        short auroraPurple = JagexColor.packHSL(8,  5, 85);   // vivid purple
         Arrays.fill(aurora1.getFaceColors(), auroraGreen);
         Arrays.fill(aurora2.getFaceColors(), auroraCyan);
         Arrays.fill(aurora3.getFaceColors(), auroraPurple);
-        // Ethereal glow: translucent per-face but slightly less than before so the colours
-        // actually read on screen instead of getting lost in the dark night sky behind them.
-        Arrays.fill(aurora1.getFaceTransparencies(), (byte) -38);
-        Arrays.fill(aurora2.getFaceTransparencies(), (byte) -38);
-        Arrays.fill(aurora3.getFaceTransparencies(), (byte) -38);
-        // Wider XZ (curtain spread) and TALL Y (the curtain's vertical reach) hang these as
-        // huge glowing sheets very high in the sky. Lighting uses moderate ambient (preserves
-        // hue) + very low non-zero contrast (flat shading without divide-by-zero). 0 contrast
-        // throws ArithmeticException since the lighting calc uses contrast as a divisor.
+        // Much less transparent so the colours actually carry weight against the night sky.
+        // -115 ≈ 55% opaque per face — substantial presence while still translucent enough
+        // for the "glow" feel.
+        Arrays.fill(aurora1.getFaceTransparencies(), (byte) -115);
+        Arrays.fill(aurora2.getFaceTransparencies(), (byte) -115);
+        Arrays.fill(aurora3.getFaceTransparencies(), (byte) -115);
+        // Low ambient (40 vs default 64) + low contrast (150 vs default 768) preserves the
+        // saturated hue and lets the model self-illuminate rather than getting shaded back down.
         auroraModel  = aurora1.scale(900, 1600, 900).translate(0, -2800, 0)
-            .light(140, 40, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+            .light(40, 150, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
         auroraModel2 = aurora2.scale(1000, 1800, 1000).translate(0, -3000, 0).rotateY90Ccw()
-            .light(140, 40, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+            .light(40, 150, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
         auroraModel3 = aurora3.scale(850, 1500, 850).translate(0, -2700, 0).rotateY180Ccw()
-            .light(140, 40, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+            .light(40, 150, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
 
         ashAnimation = client.loadAnimation(ASH_ANIMATION);
         cloudAnimation = client.loadAnimation(CLOUD_ANIMATION);

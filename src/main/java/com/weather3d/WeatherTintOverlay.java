@@ -50,14 +50,18 @@ public class WeatherTintOverlay extends Overlay
         Dimension dims = client.getRealDimensions();
 
         // ----- Weather tint pass -----
+        // Underground/instanced areas aren't "in" the weather — the screen wash should not apply.
+        // Drive the target alpha to 0 while underground so the existing easing naturally fades
+        // the wash out as you descend and back in when you surface, no hard cuts.
         if (config.enableWeatherTint())
         {
             Weather weather = plugin.getCurrentWeather();
             if (weather != null)
             {
+                boolean underground = plugin.isPlayerUnderground();
                 float intensity = plugin.getIntensityMultiplier();
                 float strength = config.weatherTintStrength() / 100f;
-                float targetAlpha = (weather.getTintMaxAlpha() / 255f) * intensity * strength;
+                float targetAlpha = underground ? 0f : (weather.getTintMaxAlpha() / 255f) * intensity * strength;
                 Color targetCol = weather.getTintColor();
 
                 float k = 0.04f;
@@ -66,7 +70,7 @@ public class WeatherTintOverlay extends Overlay
                 currentG += (targetCol.getGreen() - currentG) * k;
                 currentB += (targetCol.getBlue()  - currentB) * k;
 
-                if (currentAlpha >= 0.005f)
+                if (currentAlpha >= 0.005f && !underground)
                 {
                     int a = clamp((int) (currentAlpha * 255));
                     int r = clamp((int) currentR);
@@ -81,7 +85,9 @@ public class WeatherTintOverlay extends Overlay
         // ----- Night darken pass -----
         // Cap at ~0.65 alpha at full night × 100% darkness so even pitch-black settings keep
         // enough scene visibility for play. Below ~0.005 we skip the paint entirely.
-        if (config.enableDayNight())
+        // Also fully skipped underground/in instances — caves and instanced areas have their
+        // own lighting; layering a night wash on top would just dim them strangely.
+        if (config.enableDayNight() && !plugin.isPlayerUnderground())
         {
             float dayLight = dayCycle.getDayLightLevel();
             float darkness = config.nightDarkness() / 100f;

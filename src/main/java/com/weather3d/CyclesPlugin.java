@@ -157,10 +157,10 @@ public class CyclesPlugin extends Plugin
 				boolean isAurora = (weatherType == Weather.AURORA);
 				boolean driftEnabled = isCloud || isFog || isAurora;
 				int plane = client.getPlane();
-				// Fog/aurora creep slower than clouds. Aurora is the slowest of all (~1/12 cloud
-				// speed) so it reads as a slow drag across the sky rather than gliding past.
-				float windX = isAurora ? FOG_WIND_X_PER_FRAME * 0.25f : (isFog ? FOG_WIND_X_PER_FRAME : CLOUD_WIND_X_PER_FRAME);
-				float windY = isAurora ? FOG_WIND_Y_PER_FRAME * 0.25f : (isFog ? FOG_WIND_Y_PER_FRAME : CLOUD_WIND_Y_PER_FRAME);
+				// Fog creeps; aurora flows. Aurora's a flowing curtain — at fog × 1.5 it's
+				// visible motion (around 1 tile every 13s) but still smoother than cloud wind.
+				float windX = isAurora ? FOG_WIND_X_PER_FRAME * 1.5f : (isFog ? FOG_WIND_X_PER_FRAME : CLOUD_WIND_X_PER_FRAME);
+				float windY = isAurora ? FOG_WIND_Y_PER_FRAME * 1.5f : (isFog ? FOG_WIND_Y_PER_FRAME : CLOUD_WIND_Y_PER_FRAME);
 
 				for (WeatherObject weatherObject : weatherManager.getWeatherObjArray())
 				{
@@ -346,7 +346,8 @@ public class CyclesPlugin extends Plugin
 	 */
 	private void handleNightStars()
 	{
-		if (!config.enableDayNight() || !config.enableStarsAtNight() || !config.enableStars())
+		if (!config.enableDayNight() || !config.enableStarsAtNight() || !config.enableStars()
+				|| isPlayerUnderground())
 		{
 			fadeAuxiliaryStarsIfPresent();
 			return;
@@ -1012,12 +1013,26 @@ public class CyclesPlugin extends Plugin
 		int alternate = 1;
 		ArrayList<Tile> availableTiles = getAvailableTiles();
 
+		// Fog patches are ~3 tiles wide and hug the ground, so spawning at a tile right at the
+		// edge of a building visibly bleeds into the building's interior. Filter to tiles whose
+		// 3×3 cluster is entirely roof-free so the patch stays outside.
+		ArrayList<Tile> fogTiles = null;
+		if (weather == Weather.FOGGY)
+		{
+			fogTiles = filterStrictlyOutdoor(availableTiles, z);
+			if (fogTiles.isEmpty()) return; // nothing eligible in this scene — skip the spawn cycle
+		}
+
 		for (int i = 0; i < objects; i++)
 		{
 			int roll;
 			Tile openTile;
 			switch (weather)
 			{
+				case FOGGY:
+					roll = random.nextInt(fogTiles.size());
+					openTile = fogTiles.get(roll);
+					break;
 				default:
 					roll = random.nextInt(availableTiles.size());
 					openTile = availableTiles.get(roll);
@@ -1073,7 +1088,7 @@ public class CyclesPlugin extends Plugin
 		// Snow gets a paired ground-accumulation disc — same WeatherObject "shadow" slot, just
 		// repurposed as a soft white dusting. As more flakes spawn the discs overlap to form a
 		// cumulative blanket of snow on whatever terrain you're standing on.
-		if (weather == Weather.SNOWY && config.enableSnowAccumulation())
+		if (weather == Weather.SNOWY && config.enableSnowAccumulation() && is3x3RoofFree(lp, plane))
 		{
 			RuneLiteObject accumulation = client.createRuneLiteObject();
 			accumulation.setModel(modelHandler.getSnowGroundModel(objectVariant));
@@ -1129,19 +1144,25 @@ public class CyclesPlugin extends Plugin
 		Weather weather = weatherManager.getWeatherType();
 		ArrayList<Tile> availableTiles = getAvailableTiles();
 
+		// Mirror the spawn-time filter from renderWeather so a relocation cycle doesn't move
+		// fog patches onto building edges where they'd bleed indoors.
+		ArrayList<Tile> fogTiles = null;
+		if (weather == Weather.FOGGY)
+		{
+			fogTiles = filterStrictlyOutdoor(availableTiles, z);
+			if (fogTiles.isEmpty()) return;
+		}
+
 		for (int i = beginRotation; i < beginRotation + numToRelocate; i++)
 		{
 			int roll;
 			Tile nextTile;
 			switch (weather)
 			{
-				/*
 				case FOGGY:
-					roll = random.nextInt(availableFogTiles.size());
-					nextTile = availableFogTiles.get(roll);
+					roll = random.nextInt(fogTiles.size());
+					nextTile = fogTiles.get(roll);
 					break;
-
-				 */
 				default:
 					roll = random.nextInt(availableTiles.size());
 					nextTile = availableTiles.get(roll);
@@ -1447,6 +1468,90 @@ public class CyclesPlugin extends Plugin
 				{}
 				break;
 		}
+	}
+
+	/**
+	 * True when the player is somewhere with no real sky overhead: caves, dungeons, basements,
+	 * instances (POH, ToA, raids, etc). Anything where the natural sky is irrelevant and our
+	 * skybox/day-night/aurora layering would feel out of place.
+	 */
+	public boolean isPlayerUnderground()
+	{
+		if (currentBiome == Biome.CAVE || currentBiome == Biome.LAVA_CAVE)
+			return true;
+		if (client.isInInstancedRegion())
+			return true;
+		return false;
+	}
+
+	/**
+	 * Filters a tile list down to those whose 3×3 cluster is entirely roof-free. Used for fog
+	 * spawn/relocate (patches are wide enough to bleed visibly into adjacent indoor floors).
+	 */
+	private ArrayList<Tile> filterStrictlyOutdoor(ArrayList<Tile> tiles, int plane)
+	{
+		byte[][][] settings = client.getTileSettings();
+		if (settings == null) return tiles;
+		ArrayList<Tile> result = new ArrayList<>(tiles.size());
+		for (Tile t : tiles)
+		{
+			LocalPoint lp = t.getLocalLocation();
+			if (is3x3RoofFreeFromSettings(settings, lp, plane))
+			{
+				result.add(t);
+			}
+		}
+		return result;
+	}
+
+	private boolean is3x3RoofFreeFromSettings(byte[][][] settings, LocalPoint lp, int plane)
+	{
+		int sceneX = lp.getSceneX();
+		int sceneY = lp.getSceneY();
+		for (int dx = -1; dx <= 1; dx++)
+		{
+			for (int dy = -1; dy <= 1; dy++)
+			{
+				int x = sceneX + dx;
+				int y = sceneY + dy;
+				if (x < 0 || x >= Constants.SCENE_SIZE || y < 0 || y >= Constants.SCENE_SIZE)
+					continue;
+				int flag = settings[plane][x][y];
+				if ((flag & Constants.TILE_FLAG_UNDER_ROOF) != 0)
+					return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Returns true only if the 3×3 cluster around the given local point is entirely clear of
+	 * TILE_FLAG_UNDER_ROOF. Used to guard "wide" weather visuals — snow accumulation discs
+	 * (~2.5 tiles) and fog patches (~3 tiles) — from bleeding into adjacent indoor floors when
+	 * spawned near building edges.
+	 */
+	private boolean is3x3RoofFree(LocalPoint lp, int plane)
+	{
+		byte[][][] settings = client.getTileSettings();
+		if (settings == null) return true;
+
+		int sceneX = lp.getSceneX();
+		int sceneY = lp.getSceneY();
+
+		for (int dx = -1; dx <= 1; dx++)
+		{
+			for (int dy = -1; dy <= 1; dy++)
+			{
+				int x = sceneX + dx;
+				int y = sceneY + dy;
+				if (x < 0 || x >= Constants.SCENE_SIZE || y < 0 || y >= Constants.SCENE_SIZE)
+					continue;
+				int flag = settings[plane][x][y];
+				if ((flag & Constants.TILE_FLAG_UNDER_ROOF) != 0)
+					return false;
+			}
+		}
+		return true;
 	}
 
 	/**

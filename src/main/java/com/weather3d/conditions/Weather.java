@@ -13,7 +13,7 @@ public enum Weather {
             1200, 800, 4,
             new Color(60, 30, 22), new Color(20, 8, 4), 130),
     AURORA("Aurora", "/Weather - Cosmos.png", "/Weather - Cosmos - Mini.png", true, 3, 60, false, null,
-            600, 400, 60,
+            600, 400, 2000,
             new Color(28, 14, 60), new Color(60, 200, 140), 70),
     CLOUDY("Cloudy", "/Weather - Cloudy.png", "/Weather - Cloudy - Mini.png",true, 3, 300, false, null,
             1000, 600, 200,

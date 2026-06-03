@@ -31,6 +31,7 @@ public class SkyboxController
     private DayCycleController dayCycle;
 
     private boolean initialised = false;
+    private boolean overridingSky = false;
     private float curR, curG, curB;
 
     public void reset()
@@ -54,6 +55,22 @@ public class SkyboxController
         {
             return;
         }
+
+        // Hand the sky back to the game when underground / in instances. Our weather-driven
+        // sky colour would look bizarre painted over the ceiling of a cave or the void of an
+        // instance. Call setSkyboxColor(0) exactly once on the transition (the client keeps
+        // the last colour until told otherwise) — calling it every frame would no-op anyway.
+        if (plugin.isPlayerUnderground())
+        {
+            if (overridingSky)
+            {
+                client.setSkyboxColor(0);
+                overridingSky = false;
+                initialised = false; // surfacing later re-eases from current colour to target
+            }
+            return;
+        }
+        overridingSky = true;
 
         Weather weather = plugin.getCurrentWeather();
         if (weather == null)
