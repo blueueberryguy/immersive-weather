@@ -68,6 +68,8 @@ public class CyclesPlugin extends Plugin
 	private WeatherTintOverlay weatherTintOverlay;
 	@Inject
 	private EventBus eventBus;
+	@Inject
+	private DayCycleController dayCycleController;
 
 	/** Tracks whether we toggled off the stock Skybox plugin so we can restore it on shutdown. */
 	private boolean stockSkyboxWasEnabled = false;
@@ -146,16 +148,19 @@ public class CyclesPlugin extends Plugin
 			if (weatherType == Weather.CLOUDY
 					|| weatherType == Weather.PARTLY_CLOUDY
 					|| weatherType == Weather.STARRY
-					|| weatherType == Weather.FOGGY)
+					|| weatherType == Weather.FOGGY
+					|| weatherType == Weather.AURORA)
 			{
 				LocalPoint cameraPoint = new LocalPoint(client.getCameraX(), client.getCameraY());
 				boolean isCloud = (weatherType == Weather.CLOUDY || weatherType == Weather.PARTLY_CLOUDY);
 				boolean isFog = (weatherType == Weather.FOGGY);
-				boolean driftEnabled = isCloud || isFog;
+				boolean isAurora = (weatherType == Weather.AURORA);
+				boolean driftEnabled = isCloud || isFog || isAurora;
 				int plane = client.getPlane();
-				// Fog creeps about a third as fast as clouds — same drift machinery, smaller per-frame step.
-				float windX = isFog ? FOG_WIND_X_PER_FRAME : CLOUD_WIND_X_PER_FRAME;
-				float windY = isFog ? FOG_WIND_Y_PER_FRAME : CLOUD_WIND_Y_PER_FRAME;
+				// Fog/aurora creep slower than clouds. Aurora is the slowest of all (~1/12 cloud
+				// speed) so it reads as a slow drag across the sky rather than gliding past.
+				float windX = isAurora ? FOG_WIND_X_PER_FRAME * 0.25f : (isFog ? FOG_WIND_X_PER_FRAME : CLOUD_WIND_X_PER_FRAME);
+				float windY = isAurora ? FOG_WIND_Y_PER_FRAME * 0.25f : (isFog ? FOG_WIND_Y_PER_FRAME : CLOUD_WIND_Y_PER_FRAME);
 
 				for (WeatherObject weatherObject : weatherManager.getWeatherObjArray())
 				{
@@ -218,10 +223,10 @@ public class CyclesPlugin extends Plugin
 					// at close range still keeps the player's view clean from below.
 					int distance = runeLiteObject.getLocation().distanceTo(cameraPoint);
 
-					if (isFog)
+					if (isFog || isAurora)
 					{
-						// Fog: always-on, no TP variant (the model is already heavily translucent
-						// at all distances), no shadow tracking. Drift was applied above.
+						// Fog/aurora: always-on, no TP variant (already heavily translucent at all
+						// distances), no shadow tracking. Drift was applied above.
 						runeLiteObject.setActive(true);
 					}
 					else if (isCloud)
@@ -322,12 +327,74 @@ public class CyclesPlugin extends Plugin
 			handleSoundChanges(wm);
 		}
 
+		handleNightStars();
+
 		clearFadedWeatherManagers();
 
 		if (savedZPlane != client.getPlane())
 		{
 			transitionZPlane();
 			savedZPlane = client.getPlane();
+		}
+	}
+
+	/**
+	 * Maintains an auxiliary STARRY WeatherManager during night, so stars layer on top of
+	 * whatever the primary weather is. Only one auxiliary star manager exists at a time. When
+	 * day comes back (or the primary weather is already STARRY/aurora-stacked) we fade it out
+	 * via the standard fading path.
+	 */
+	private void handleNightStars()
+	{
+		if (!config.enableDayNight() || !config.enableStarsAtNight() || !config.enableStars())
+		{
+			fadeAuxiliaryStarsIfPresent();
+			return;
+		}
+
+		boolean isNight = dayCycleController.isNight();
+		boolean primaryIsStarry = currentWeather == Weather.STARRY;
+
+		WeatherManager aux = findAuxiliaryStars();
+
+		if (isNight && !primaryIsStarry)
+		{
+			if (aux == null)
+			{
+				SoundPlayer[] sp = new SoundPlayer[]{new SoundPlayer(), new SoundPlayer()};
+				WeatherManager mgr = new WeatherManager(Weather.STARRY, sp, 0, new ArrayList<>(), 0, false);
+				mgr.setAuxiliary(true);
+				weatherManagerList.add(mgr);
+			}
+			else
+			{
+				// keep it alive
+				aux.setFading(false);
+				handleWeatherChanges(aux);
+			}
+		}
+		else
+		{
+			fadeAuxiliaryStarsIfPresent();
+		}
+	}
+
+	private WeatherManager findAuxiliaryStars()
+	{
+		for (WeatherManager wm : weatherManagerList)
+		{
+			if (wm.isAuxiliary() && wm.getWeatherType() == Weather.STARRY)
+				return wm;
+		}
+		return null;
+	}
+
+	private void fadeAuxiliaryStarsIfPresent()
+	{
+		WeatherManager aux = findAuxiliaryStars();
+		if (aux != null && !aux.isFading())
+		{
+			aux.setFading(true);
 		}
 	}
 
@@ -608,6 +675,10 @@ public class CyclesPlugin extends Plugin
 		for (int i = 0; i < weatherManagerList.size(); i++)
 		{
 			WeatherManager weatherManager = weatherManagerList.get(i);
+			// Auxiliary managers (e.g. night stars layered on top of the active weather) are
+			// not driven by currentWeather; day/night logic controls their fading separately.
+			if (weatherManager.isAuxiliary())
+				continue;
 			weatherManager.setFading(true);
 			if (weatherManager.getWeatherType() == currentWeather)
 			{
@@ -757,6 +828,8 @@ public class CyclesPlugin extends Plugin
 				base = config.starryDensity(); break;
 			case STORMY:
 				base = config.stormDensity(); break;
+			case AURORA:
+				base = config.auroraDensity(); break;
 			case PARTLY_CLOUDY:
 				base = config.partlyCloudyDensity(); break;
 			default:
@@ -825,6 +898,8 @@ public class CyclesPlugin extends Plugin
 				return config.enableClouds();
 			case STARRY:
 				return config.enableStars();
+			case AURORA:
+				return true;
 			default:
 			case COVERED:
 			case SUNNY:
@@ -1221,6 +1296,9 @@ public class CyclesPlugin extends Plugin
 			case ASHFALL:
 				currentWeather = Weather.ASHFALL;
 				break;
+			case AURORA:
+				currentWeather = Weather.AURORA;
+				break;
 			default:
 			case DYNAMIC:
 				currentWeather = syncWeather(currentSeason, currentBiome);
@@ -1260,7 +1338,14 @@ public class CyclesPlugin extends Plugin
 		{
 			if (forecast.getSeasonCondition() == seasonCondition && forecast.getBiomeCondition() == biomeCondition)
 			{
-				return forecast.getForecastArray()[cycleSegment];
+				Weather rolled = forecast.getForecastArray()[cycleSegment];
+				// Aurora is opt-in via config — if the user has it disabled in cycles, gracefully
+				// degrade to PARTLY_CLOUDY (a quiet substitute) so the forecast slot still works.
+				if (rolled == Weather.AURORA && !config.enableAuroraInCycle())
+				{
+					return Weather.PARTLY_CLOUDY;
+				}
+				return rolled;
 			}
 		}
 		return Weather.COVERED;

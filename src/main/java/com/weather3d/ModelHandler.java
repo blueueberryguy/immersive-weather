@@ -30,6 +30,10 @@ public class ModelHandler
     private Model snowGroundModel;
     private Model snowGroundModel2;
     private Model snowGroundModel3;
+    private Model auroraModel;
+    private Model auroraModel2;
+    private Model auroraModel3;
+    private Animation auroraAnimation;
     private Model fogModel;
     private Model fogModel2;
     private Model fogModel3;
@@ -252,12 +256,50 @@ public class ModelHandler
         Arrays.fill(starMDTP2, (byte) -80);
         Arrays.fill(starMDTP3, (byte) -80);
 
+        // Aurora: switched from CLOUD_MODEL to FOG_MODEL specifically because the fog model has
+        // vertically-elongated brushstroke geometry. We rejected it for actual fog (ground-level
+        // streaks looked bad) but those same streaks rendered HIGH in the sky and recoloured
+        // bright are exactly the ribbon-curtain silhouettes that aurora needs. Cloud-model puffs
+        // are what made aurora previously read as "coloured clouds" instead of glowing ribbons.
+        ModelData aurora1 = client.loadModelData(FOG_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        ModelData aurora2 = client.loadModelData(FOG_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        ModelData aurora3 = client.loadModelData(FOG_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        // Aurora hues — saturated mid-luminance so the lighting computation doesn't blow them
+        // out to white. Earlier values (luminance 115+ with ambient 255) saturated to pure
+        // white regardless of hue, which is why aurora previously rendered colourless.
+        short auroraGreen  = JagexColor.packHSL(45, 7, 78);   // vivid green
+        short auroraCyan   = JagexColor.packHSL(35, 6, 80);   // bright cyan
+        short auroraPurple = JagexColor.packHSL(10, 5, 70);   // glowing purple
+        Arrays.fill(aurora1.getFaceColors(), auroraGreen);
+        Arrays.fill(aurora2.getFaceColors(), auroraCyan);
+        Arrays.fill(aurora3.getFaceColors(), auroraPurple);
+        // Ethereal glow: translucent per-face but slightly less than before so the colours
+        // actually read on screen instead of getting lost in the dark night sky behind them.
+        Arrays.fill(aurora1.getFaceTransparencies(), (byte) -38);
+        Arrays.fill(aurora2.getFaceTransparencies(), (byte) -38);
+        Arrays.fill(aurora3.getFaceTransparencies(), (byte) -38);
+        // Wider XZ (curtain spread) and TALL Y (the curtain's vertical reach) hang these as
+        // huge glowing sheets very high in the sky. Lighting uses moderate ambient (preserves
+        // hue) + very low non-zero contrast (flat shading without divide-by-zero). 0 contrast
+        // throws ArithmeticException since the lighting calc uses contrast as a divisor.
+        auroraModel  = aurora1.scale(900, 1600, 900).translate(0, -2800, 0)
+            .light(140, 40, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        auroraModel2 = aurora2.scale(1000, 1800, 1000).translate(0, -3000, 0).rotateY90Ccw()
+            .light(140, 40, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        auroraModel3 = aurora3.scale(850, 1500, 850).translate(0, -2700, 0).rotateY180Ccw()
+            .light(140, 40, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+
         ashAnimation = client.loadAnimation(ASH_ANIMATION);
         cloudAnimation = client.loadAnimation(CLOUD_ANIMATION);
         fogAnimation = client.loadAnimation(CLOUD_ANIMATION);
         rainAnimation = client.loadAnimation(RAIN_ANIMATION);
         snowAnimation = client.loadAnimation(SNOW_ANIMATION);
         starAnimation = client.loadAnimation(STAR_ANIMATION);
+        // Back to CLOUD_ANIMATION — FOG_ANIMATION was deforming the long ribbon geometry in
+        // jerky steps that read as "twitching" rather than the slow buttery aurora drift we
+        // want. Cloud animation is the gentlest built-in morph and pairs with the slower drift
+        // (see CyclesPlugin's aurora wind step at 0.25× fog speed).
+        auroraAnimation = client.loadAnimation(CLOUD_ANIMATION);
     }
 
     /**
@@ -460,6 +502,17 @@ public class ModelHandler
                     case 3:
                         return cloudModel3;
                 }
+            case AURORA:
+                switch(alternative)
+                {
+                    default:
+                    case 1:
+                        return auroraModel;
+                    case 2:
+                        return auroraModel2;
+                    case 3:
+                        return auroraModel3;
+                }
             case STARRY:
                 switch(alternative)
                 {
@@ -522,6 +575,8 @@ public class ModelHandler
             case CLOUDY:
             case PARTLY_CLOUDY:
                 return cloudAnimation;
+            case AURORA:
+                return auroraAnimation;
             case STARRY:
                 return starAnimation;
             case FOGGY:

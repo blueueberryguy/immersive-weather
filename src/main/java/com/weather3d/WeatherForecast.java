@@ -7,7 +7,7 @@ import lombok.Getter;
 
 public enum WeatherForecast {
     SPRING_ARCTIC(Season.SPRING, Biome.ARCTIC, new Weather[]
-            {Weather.CLOUDY, Weather.SNOWY, Weather.SNOWY, Weather.CLOUDY, Weather.PARTLY_CLOUDY, Weather.PARTLY_CLOUDY, Weather.SUNNY, Weather.FOGGY, Weather.SNOWY, Weather.PARTLY_CLOUDY, Weather.FOGGY, Weather.CLOUDY}),
+            {Weather.CLOUDY, Weather.SNOWY, Weather.AURORA, Weather.CLOUDY, Weather.PARTLY_CLOUDY, Weather.PARTLY_CLOUDY, Weather.SUNNY, Weather.FOGGY, Weather.SNOWY, Weather.AURORA, Weather.FOGGY, Weather.CLOUDY}),
     SPRING_BARRENS(Season.SPRING, Biome.BARRENS, new Weather[]
             {Weather.SUNNY, Weather.SUNNY, Weather.PARTLY_CLOUDY, Weather.CLOUDY, Weather.RAINY, Weather.PARTLY_CLOUDY, Weather.SUNNY, Weather.SUNNY, Weather.STORMY, Weather.PARTLY_CLOUDY, Weather.SUNNY,  Weather.PARTLY_CLOUDY}),
     SPRING_CAVE(Season.SPRING, Biome.CAVE, new Weather[]
@@ -23,7 +23,7 @@ public enum WeatherForecast {
     SPRING_LAVA_CAVE(Season.SPRING, Biome.LAVA_CAVE, new Weather[]
             {Weather.COVERED, Weather.COVERED, Weather.COVERED, Weather.COVERED, Weather.COVERED, Weather.COVERED, Weather.COVERED, Weather.COVERED, Weather.COVERED, Weather.COVERED, Weather.COVERED, Weather.COVERED}),
     SPRING_MOUNTAIN(Season.SPRING, Biome.MOUNTAIN, new Weather[]
-            {Weather.STORMY, Weather.SNOWY, Weather.CLOUDY, Weather.SNOWY, Weather.PARTLY_CLOUDY, Weather.FOGGY, Weather.CLOUDY, Weather.SNOWY, Weather.SNOWY, Weather.STORMY, Weather.SUNNY, Weather.CLOUDY}),
+            {Weather.STORMY, Weather.SNOWY, Weather.CLOUDY, Weather.SNOWY, Weather.AURORA, Weather.FOGGY, Weather.CLOUDY, Weather.SNOWY, Weather.SNOWY, Weather.STORMY, Weather.SUNNY, Weather.AURORA}),
     SPRING_SWAMP(Season.SPRING, Biome.SWAMP, new Weather[]
             {Weather.FOGGY, Weather.RAINY, Weather.CLOUDY, Weather.PARTLY_CLOUDY, Weather.FOGGY, Weather.SUNNY, Weather.RAINY, Weather.CLOUDY, Weather.FOGGY, Weather.RAINY, Weather.PARTLY_CLOUDY, Weather.FOGGY}),
     SPRING_TROPICAL(Season.SPRING, Biome.TROPICAL, new Weather[]
@@ -57,7 +57,7 @@ public enum WeatherForecast {
             {Weather.ASHFALL, Weather.ASHFALL, Weather.ASHFALL, Weather.SUNNY, Weather.SUNNY, Weather.ASHFALL, Weather.SUNNY, Weather.ASHFALL, Weather.ASHFALL, Weather.SUNNY, Weather.SUNNY, Weather.SUNNY}),
 
     AUTUMN_ARCTIC(Season.AUTUMN, Biome.ARCTIC, new Weather[]
-            {Weather.FOGGY, Weather.PARTLY_CLOUDY, Weather.CLOUDY, Weather.SNOWY, Weather.PARTLY_CLOUDY, Weather.SNOWY, Weather.SUNNY, Weather.FOGGY, Weather.FOGGY, Weather.CLOUDY, Weather.SNOWY, Weather.CLOUDY}),
+            {Weather.FOGGY, Weather.AURORA, Weather.CLOUDY, Weather.SNOWY, Weather.PARTLY_CLOUDY, Weather.SNOWY, Weather.SUNNY, Weather.AURORA, Weather.FOGGY, Weather.CLOUDY, Weather.SNOWY, Weather.AURORA}),
     AUTUMN_BARRENS(Season.AUTUMN, Biome.BARRENS, new Weather[]
             {Weather.RAINY, Weather.CLOUDY, Weather.PARTLY_CLOUDY, Weather.SUNNY, Weather.PARTLY_CLOUDY, Weather.CLOUDY, Weather.STORMY, Weather.SUNNY, Weather.SUNNY, Weather.PARTLY_CLOUDY, Weather.CLOUDY, Weather.PARTLY_CLOUDY}),
     AUTUMN_CAVE(Season.AUTUMN, Biome.CAVE, new Weather[]
@@ -82,7 +82,7 @@ public enum WeatherForecast {
             {Weather.PARTLY_CLOUDY, Weather.ASHFALL, Weather.SUNNY, Weather.SUNNY, Weather.PARTLY_CLOUDY, Weather.ASHFALL, Weather.ASHFALL, Weather.PARTLY_CLOUDY, Weather.ASHFALL, Weather.SUNNY, Weather.SUNNY, Weather.ASHFALL}),
 
     WINTER_ARCTIC(Season.WINTER, Biome.ARCTIC, new Weather[]
-            {Weather.SNOWY, Weather.SNOWY, Weather.CLOUDY, Weather.PARTLY_CLOUDY, Weather.SUNNY, Weather.SNOWY, Weather.SNOWY, Weather.FOGGY, Weather.SNOWY, Weather.CLOUDY, Weather.SNOWY, Weather.FOGGY}),
+            {Weather.SNOWY, Weather.AURORA, Weather.CLOUDY, Weather.AURORA, Weather.SUNNY, Weather.SNOWY, Weather.AURORA, Weather.FOGGY, Weather.SNOWY, Weather.AURORA, Weather.SNOWY, Weather.AURORA}),
     WINTER_BARRENS(Season.WINTER, Biome.BARRENS, new Weather[]
             {Weather.FOGGY, Weather.SUNNY, Weather.PARTLY_CLOUDY, Weather.CLOUDY, Weather.STORMY, Weather.PARTLY_CLOUDY, Weather.SUNNY, Weather.PARTLY_CLOUDY, Weather.STORMY, Weather.CLOUDY, Weather.STORMY, Weather.SUNNY}),
     WINTER_CAVE(Season.WINTER, Biome.CAVE, new Weather[]

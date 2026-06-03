@@ -8,6 +8,7 @@ public interface CyclesConfig extends Config {
 	enum WeatherType {
 		DYNAMIC,
 		ASHFALL,
+		AURORA,
 		CLEAR,
 		CLOUDY,
 		FOGGY,
@@ -32,6 +33,13 @@ public interface CyclesConfig extends Config {
 		MODERATE,
 		HEAVY,
 		EXTREME
+	}
+
+	enum TimeOfDay {
+		DYNAMIC,
+		DAY,
+		DUSK,
+		NIGHT
 	}
 
 	@ConfigSection(
@@ -231,6 +239,115 @@ public interface CyclesConfig extends Config {
 	default WeatherIntensity weatherIntensity()
 	{
 		return WeatherIntensity.MODERATE;
+	}
+
+	@ConfigSection(
+			name = "Day & Night",
+			description = "Diurnal cycle, night sky, and aurora",
+			position = 56
+	)
+	String dayNightSettings = "dayNightSettings";
+
+	@ConfigItem(
+			keyName = "enableDayNight",
+			name = "Enable Day/Night Cycle",
+			description = "Cycles the sky between day and night on a real-time clock, independent of weather",
+			section = dayNightSettings,
+			position = 1
+	)
+	default boolean enableDayNight()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+			keyName = "timeOfDay",
+			name = "Time of Day",
+			description = "DYNAMIC follows the real-time cycle. DAY/DUSK/NIGHT force a fixed light level for previewing or for testing weather combinations against a specific lighting state.",
+			section = dayNightSettings,
+			position = 2
+	)
+	default TimeOfDay timeOfDay()
+	{
+		return TimeOfDay.DYNAMIC;
+	}
+
+	@ConfigItem(
+			keyName = "dayNightPeriodMinutes",
+			name = "Cycle Length (min)",
+			description = "Real-time minutes for one full day → night → day cycle (only used when Time of Day is DYNAMIC)",
+			section = dayNightSettings,
+			position = 3
+	)
+	@Range(min = 2, max = 60)
+	default int dayNightPeriodMinutes()
+	{
+		return 12;
+	}
+
+	@ConfigItem(
+			keyName = "nightDarkness",
+			name = "Night Darkness",
+			description = "How dark the sky gets at midnight (low = bright dusk, high = pitch-black)",
+			section = dayNightSettings,
+			position = 4
+	)
+	@Units(Units.PERCENT)
+	@Range(min = 10, max = 100)
+	default int nightDarkness()
+	{
+		return 70;
+	}
+
+	@ConfigItem(
+			keyName = "enableStarsAtNight",
+			name = "Stars at Night",
+			description = "Spawn stars in the sky during night, regardless of the active weather",
+			section = dayNightSettings,
+			position = 5
+	)
+	default boolean enableStarsAtNight()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+			keyName = "enableAuroraInCycle",
+			name = "Aurora in Cycles",
+			description = "Allow Aurora to roll occasionally in the dynamic weather cycle (mostly in cold biomes at night)",
+			section = dayNightSettings,
+			position = 6
+	)
+	default boolean enableAuroraInCycle()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+			keyName = "auroraIntensity",
+			name = "Aurora Intensity",
+			description = "Strength of the aurora's purple/green/blue glow on the sky and ground",
+			section = dayNightSettings,
+			position = 7
+	)
+	@Units(Units.PERCENT)
+	@Range(max = 100)
+	default int auroraIntensity()
+	{
+		return 60;
+	}
+
+	@ConfigItem(
+			keyName = "auroraDensity",
+			name = "Aurora Density",
+			description = "Number of aurora bands rendered in the sky",
+			section = dayNightSettings,
+			position = 8
+	)
+	@Range(max = 600)
+	default int auroraDensity()
+	{
+		return 120;
 	}
 
 	@ConfigSection(

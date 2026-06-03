@@ -19,6 +19,18 @@ public class WeatherManager
     private ArrayList<WeatherObject> weatherObjArray;
     private int startRotation;
     private boolean isFading;
+    /**
+     * Auxiliary managers exist in parallel with the primary currentWeather (e.g. night-stars
+     * layered on top of CLOUDY). They are NOT auto-faded when the primary weather changes —
+     * their lifecycle is controlled by day/night logic instead.
+     */
+    private boolean isAuxiliary = false;
+
+    public WeatherManager(Weather weatherType, SoundPlayer[] soundPlayers, int soundPlayerTimer,
+                          ArrayList<WeatherObject> weatherObjArray, int startRotation, boolean isFading)
+    {
+        this(weatherType, soundPlayers, soundPlayerTimer, weatherObjArray, startRotation, isFading, false);
+    }
 
     public SoundPlayer getPrimarySoundPlayer()
     {

@@ -27,6 +27,8 @@ public class SkyboxController
     private CyclesPlugin plugin;
     @Inject
     private CyclesConfig config;
+    @Inject
+    private DayCycleController dayCycle;
 
     private boolean initialised = false;
     private float curR, curG, curB;
@@ -91,34 +93,53 @@ public class SkyboxController
         {
             // multiply down by up to 50% based on intensity
             float darken = 1f - 0.45f * intensity;
-            return new Color(
+            base = new Color(
                 clamp((int) (base.getRed() * darken)),
                 clamp((int) (base.getGreen() * darken)),
                 clamp((int) (base.getBlue() * darken))
             );
         }
-
-        if (weather == Weather.SNOWY)
+        else if (weather == Weather.SNOWY)
         {
-            // push toward pale white/grey
             float toward = 0.35f * intensity;
-            return blendToward(base, new Color(232, 236, 242), toward);
+            base = blendToward(base, new Color(232, 236, 242), toward);
         }
-
-        if (weather == Weather.FOGGY)
+        else if (weather == Weather.FOGGY)
         {
             float toward = 0.25f * intensity;
-            return blendToward(base, new Color(195, 198, 202), toward);
+            base = blendToward(base, new Color(195, 198, 202), toward);
         }
-
-        if (weather == Weather.ASHFALL)
+        else if (weather == Weather.ASHFALL)
         {
             float darken = 1f - 0.3f * intensity;
-            return new Color(
+            base = new Color(
                 clamp((int) (base.getRed() * darken)),
                 clamp((int) (base.getGreen() * darken)),
                 clamp((int) (base.getBlue() * darken))
             );
+        }
+
+        // Aurora overlays its own purple/blue base on top of whatever the weather chose, plus
+        // a shifting green tint at high intensity. We blend instead of replacing so aurora
+        // stacked on a cloudy night still feels like "cloudy night with aurora", not "aurora".
+        if (weather == Weather.AURORA)
+        {
+            float auroraStrength = (config.auroraIntensity() / 100f);
+            Color auroraBase = new Color(34, 18, 70);
+            base = blendToward(base, auroraBase, 0.5f);
+            Color auroraGreen = new Color(40, 180, 130);
+            base = blendToward(base, auroraGreen, 0.25f * auroraStrength);
+        }
+
+        // Day/night cycle: at full night blend toward a deep navy clamped by nightDarkness so
+        // even pitch-black settings keep enough sky luminance for gameplay.
+        if (config.enableDayNight())
+        {
+            float dayLight = dayCycle.getDayLightLevel();
+            float darkness = config.nightDarkness() / 100f;
+            float nightWeight = (1f - dayLight) * darkness;
+            Color nightSky = new Color(10, 12, 30);
+            base = blendToward(base, nightSky, nightWeight);
         }
 
         return base;
