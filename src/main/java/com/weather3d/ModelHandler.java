@@ -129,20 +129,35 @@ public class ModelHandler
         // doesn't read as a solid disc. Translated up off the tile a few units to avoid Z-fighting.
         rebuildCloudShadowModels();
 
-        ModelData fogModelData = client.loadModelData(FOG_MODEL).cloneVertices().cloneColors().cloneTransparencies();
-        ModelData fogModelData2 = client.loadModelData(FOG_MODEL).cloneVertices().cloneColors().cloneTransparencies();
-        ModelData fogModelData3 = client.loadModelData(FOG_MODEL).cloneVertices().cloneColors().cloneTransparencies();
-        short fogFaceColour = fogModelData.getFaceColors()[0];
-        short fogReplaceColour = JagexColor.packHSL(54, 0, 95);
-        fogModel = fogModelData.scale(240, 140, 240).recolor(fogFaceColour, fogReplaceColour).translate(0, -70, 0).light(220, ModelData.DEFAULT_CONTRAST, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
-        fogModel2 = fogModelData2.scale(240, 140, 240).recolor(fogFaceColour, fogReplaceColour).translate(0, -100, 0).light(220, ModelData.DEFAULT_CONTRAST, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
-        fogModel3 = fogModelData3.scale(240, 140, 240).recolor(fogFaceColour, fogReplaceColour).translate(0, -85, 0).light(220, ModelData.DEFAULT_CONTRAST, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
-        byte[] fogTransparency = fogModelData.getFaceTransparencies();
-        byte[] fogTransparency2 = fogModelData2.getFaceTransparencies();
-        byte[] fogTransparency3 = fogModelData3.getFaceTransparencies();
-        Arrays.fill(fogTransparency, (byte) -25);
-        Arrays.fill(fogTransparency2, (byte) -25);
-        Arrays.fill(fogTransparency3, (byte) -25);
+        // Fog: ditched the FOG_MODEL (29290) entirely — its geometry has vertically-elongated
+        // brushstroke shapes that read as streaky paint at any reasonable scale. The cloud model
+        // gives us a rounded puff; flattened wide-and-short (low Y) and recoloured grey-white,
+        // it reads as a soft drifting fog bank hugging the floor at ankle-to-knee height.
+        // Blanket-fill every face colour (same gotcha as clouds — recolouring only faceColors[0]
+        // left the rest at the model's defaults, hence the streaky multi-tone look).
+        short fogColour = JagexColor.packHSL(48, 0, 103);
+        ModelData fogModelData  = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        ModelData fogModelData2 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        ModelData fogModelData3 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        Arrays.fill(fogModelData.getFaceColors(),  fogColour);
+        Arrays.fill(fogModelData2.getFaceColors(), fogColour);
+        Arrays.fill(fogModelData3.getFaceColors(), fogColour);
+        // Ultra-translucent per-face — that's the key to smooth fog. The cloud model has a
+        // limited number of facets, so when each face is contrasty enough to see (e.g. ~13%
+        // opaque) you get visible hexagonal polygon edges where patches overlap. Drop alpha
+        // to ~5% per face and the polygons individually become nearly invisible; fog visibility
+        // emerges from the cumulative overlap of many subtle layers instead.
+        Arrays.fill(fogModelData.getFaceTransparencies(),  (byte) -12);
+        Arrays.fill(fogModelData2.getFaceTransparencies(), (byte) -12);
+        Arrays.fill(fogModelData3.getFaceTransparencies(), (byte) -12);
+        // Smaller patches (≈3-3.5 tiles each) so individual polygon footprints are tighter
+        // and adjacent patches blend smoothly. Y still low so banks hug knee/waist height.
+        fogModel  = fogModelData.scale(400, 90, 400).translate(0, -40, 0)
+            .light(235, 70, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        fogModel2 = fogModelData2.scale(480, 110, 480).translate(0, -55, 0).rotateY90Ccw()
+            .light(235, 70, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        fogModel3 = fogModelData3.scale(440, 80, 440).translate(0, -45, 0).rotateY180Ccw()
+            .light(235, 70, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
 
         // Snow: Wintertodt ice-burst model + animation (27835/7000). The model's natural geometry
         // has spiky points — at default lighting they read as 4-pointed sparkles ("star-like").

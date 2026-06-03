@@ -461,7 +461,7 @@ public interface CyclesConfig extends Config {
 	@Range(max = 1800)
 	default int foggyDensity()
 	{
-		return 500;
+		return 300;
 	}
 
 	@ConfigItem(

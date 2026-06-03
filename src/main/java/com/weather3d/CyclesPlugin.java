@@ -89,6 +89,9 @@ public class CyclesPlugin extends Plugin
 	// Slight Y component so the wind isn't a pure cardinal direction (more natural-feeling).
 	private static final float CLOUD_WIND_X_PER_FRAME = 0.4f;
 	private static final float CLOUD_WIND_Y_PER_FRAME = 0.12f;
+	// Fog drifts much slower than clouds — it should look airy and creeping, not blown along.
+	private static final float FOG_WIND_X_PER_FRAME = 0.13f;
+	private static final float FOG_WIND_Y_PER_FRAME = 0.05f;
 	private final int FOG_RADIUS = 100;
 
 	@Getter
@@ -142,11 +145,17 @@ public class CyclesPlugin extends Plugin
 
 			if (weatherType == Weather.CLOUDY
 					|| weatherType == Weather.PARTLY_CLOUDY
-					|| weatherType == Weather.STARRY)
+					|| weatherType == Weather.STARRY
+					|| weatherType == Weather.FOGGY)
 			{
 				LocalPoint cameraPoint = new LocalPoint(client.getCameraX(), client.getCameraY());
-				boolean driftEnabled = (weatherType == Weather.CLOUDY || weatherType == Weather.PARTLY_CLOUDY);
+				boolean isCloud = (weatherType == Weather.CLOUDY || weatherType == Weather.PARTLY_CLOUDY);
+				boolean isFog = (weatherType == Weather.FOGGY);
+				boolean driftEnabled = isCloud || isFog;
 				int plane = client.getPlane();
+				// Fog creeps about a third as fast as clouds — same drift machinery, smaller per-frame step.
+				float windX = isFog ? FOG_WIND_X_PER_FRAME : CLOUD_WIND_X_PER_FRAME;
+				float windY = isFog ? FOG_WIND_Y_PER_FRAME : CLOUD_WIND_Y_PER_FRAME;
 
 				for (WeatherObject weatherObject : weatherManager.getWeatherObjArray())
 				{
@@ -154,10 +163,10 @@ public class CyclesPlugin extends Plugin
 					RuneLiteObject shadowObject = weatherObject.getShadowObject();
 					int objectVariant = weatherObject.getObjVariant();
 
-					// Drift: slide clouds across the sky each client-tick. baseX/baseY are the
-					// spawn anchor; we add accumulated driftX so motion is sub-tile-smooth even at
-					// frame rate. When a cloud sails off the scene we wrap it to the upwind edge
-					// so the world stays populated without obvious pop-in.
+					// Drift: slide clouds/fog across the scene each client-tick. baseX/baseY are
+					// the spawn anchor; we add accumulated driftX so motion is sub-tile-smooth
+					// even at frame rate. When an object sails off the scene we wrap it to the
+					// upwind edge so the world stays populated without obvious pop-in.
 					if (driftEnabled)
 					{
 						if (weatherObject.getBaseX() == WeatherObject.UNSET_BASE)
@@ -167,8 +176,8 @@ public class CyclesPlugin extends Plugin
 							weatherObject.setBaseY(anchor.getY());
 						}
 
-						weatherObject.setDriftX(weatherObject.getDriftX() + CLOUD_WIND_X_PER_FRAME);
-						weatherObject.setDriftY(weatherObject.getDriftY() + CLOUD_WIND_Y_PER_FRAME);
+						weatherObject.setDriftX(weatherObject.getDriftX() + windX);
+						weatherObject.setDriftY(weatherObject.getDriftY() + windY);
 
 						int newX = weatherObject.getBaseX() + (int) weatherObject.getDriftX();
 						int newY = weatherObject.getBaseY() + (int) weatherObject.getDriftY();
@@ -209,7 +218,13 @@ public class CyclesPlugin extends Plugin
 					// at close range still keeps the player's view clean from below.
 					int distance = runeLiteObject.getLocation().distanceTo(cameraPoint);
 
-					if (driftEnabled)
+					if (isFog)
+					{
+						// Fog: always-on, no TP variant (the model is already heavily translucent
+						// at all distances), no shadow tracking. Drift was applied above.
+						runeLiteObject.setActive(true);
+					}
+					else if (isCloud)
 					{
 						runeLiteObject.setActive(true);
 						if (shadowObject != null)
