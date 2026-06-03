@@ -200,10 +200,15 @@ public class ModelHandler
         short[] rainFaceColours2 = rainModelData2.getFaceColors();
         short[] rainFaceColours3 = rainModelData3.getFaceColors();
         short rainRippleColour = JagexColor.packHSL(32, 1, JagexColor.LUMINANCE_MAX);
-        short rainDropColour = JagexColor.packHSL(32, 1, 95);
+        // Brighter droplets so individual streaks pop against dark stormy backdrops
+        // (Classic WoW reference is near-white streaks against grey-green sky).
+        short rainDropColour = JagexColor.packHSL(32, 1, 118);
+        // Per-variant Y variation breaks up the "all streaks the same length" look so the rain
+        // field reads as a varied curtain rather than a uniform grid. ~85% / 100% / 115% lengths
+        // with slightly different XZ widths.
         rainModel  = rainModelData.scale(100, rainYScale, 100).recolor(rainFaceColours[0], rainRippleColour).recolor(rainFaceColours[23], rainDropColour).light();
-        rainModel2 = rainModelData2.scale(90, rainYScale, 90).recolor(rainFaceColours2[0], rainRippleColour).recolor(rainFaceColours2[23], rainDropColour).rotateY90Ccw().light();
-        rainModel3 = rainModelData3.scale(110, rainYScale, 110).recolor(rainFaceColours3[0], rainRippleColour).recolor(rainFaceColours3[23], rainDropColour).rotateY270Ccw().light();
+        rainModel2 = rainModelData2.scale(90, (int)(rainYScale * 1.15f), 90).recolor(rainFaceColours2[0], rainRippleColour).recolor(rainFaceColours2[23], rainDropColour).rotateY90Ccw().light();
+        rainModel3 = rainModelData3.scale(110, (int)(rainYScale * 0.85f), 110).recolor(rainFaceColours3[0], rainRippleColour).recolor(rainFaceColours3[23], rainDropColour).rotateY270Ccw().light();
 
         int stormYScale = rainHeightFor(true);
         ModelData stormModelData = client.loadModelData(RAIN_MODEL).cloneColors().cloneVertices();
@@ -214,9 +219,10 @@ public class ModelHandler
         short[] stormFaceColours3 = stormModelData3.getFaceColors();
         short stormRippleColour = JagexColor.packHSL(38, 1, 95);
         short stormDropColour = JagexColor.packHSL(38, 2, 80);
+        // Same Y-variation treatment as rain so storm streaks look like a varied torrent.
         stormModel  = stormModelData.scale(110, stormYScale, 110).recolor(stormFaceColours[0], stormRippleColour).recolor(stormFaceColours[23], stormDropColour).light();
-        stormModel2 = stormModelData2.scale(100, stormYScale, 100).recolor(stormFaceColours2[0], stormRippleColour).recolor(stormFaceColours2[23], stormDropColour).rotateY90Ccw().light();
-        stormModel3 = stormModelData3.scale(120, stormYScale, 120).recolor(stormFaceColours3[0], stormRippleColour).recolor(stormFaceColours3[23], stormDropColour).rotateY90Ccw().light();
+        stormModel2 = stormModelData2.scale(100, (int)(stormYScale * 1.18f), 100).recolor(stormFaceColours2[0], stormRippleColour).recolor(stormFaceColours2[23], stormDropColour).rotateY90Ccw().light();
+        stormModel3 = stormModelData3.scale(120, (int)(stormYScale * 0.82f), 120).recolor(stormFaceColours3[0], stormRippleColour).recolor(stormFaceColours3[23], stormDropColour).rotateY90Ccw().light();
 
         ModelData starModelData = client.loadModelData(STAR_MODEL).cloneColors().cloneVertices().cloneTransparencies();
         ModelData starModelData2 = client.loadModelData(STAR_MODEL).cloneColors().cloneVertices().cloneTransparencies();
@@ -262,19 +268,22 @@ public class ModelHandler
     {
         int opacityCfg = config == null ? 25 : config.cloudShadowOpacity();
         // Face transparency byte is read unsigned: 0 = fully opaque, 255 = fully invisible.
-        // KEY INSIGHT: each shadow is one polygon-faced disc with uniform alpha per face. When
-        // two shadows overlap, you see (alpha_A + alpha_B), and the boundary between "A only"
-        // and "A+B" reads as a visible polygon edge — exactly the jagged stack the user saw.
         //
-        // Fix: keep each individual shadow ULTRA-translucent so the per-shadow alpha is small
-        // enough that adding 2-3 together still produces a soft tint rather than a hard step.
-        // Map opacity slider [5..100] onto unsigned [250..205]:
-        //   5%   → 250 (~98% transparent — barely a whisper)
-        //   25%  → 239 (~93% transparent — default; only really shows where 2-3 stack)
-        //   100% → 205 (~80% transparent — distinct, never the black blob of an opaque disc)
-        int unsigned = 250 - (int) ((opacityCfg / 100f) * 45);
+        // The stacking problem: with ~200 clouds × large shadow discs, every tile (especially
+        // viewed from overhead) gets covered by 5-8 overlapping shadows. Per-face alpha
+        // compounds across overlaps — 5 stacks × 5% per face ≈ 25% darkening, 8 stacks × 7%
+        // ≈ 44%. That's why overhead views go nearly black even when individual shadows look
+        // fine in profile.
+        //
+        // Solution: drop per-face alpha to ~3% at the default slider so even 6-8 overlapping
+        // stacks compound to only ~15-20% darkening. Slider max can still go higher for users
+        // who want strong patches.
+        //   5%   → 252 (~98% transparent — whisper, barely visible even with stacks)
+        //   25%  → 246 (~96% transparent — default; soft tint where 3-5 stack)
+        //   100% → 220 (~86% transparent — distinct patches but never pitch black overhead)
+        int unsigned = 254 - (int) ((opacityCfg / 100f) * 34);
         if (unsigned > 255) unsigned = 255;
-        if (unsigned < 180) unsigned = 180;
+        if (unsigned < 195) unsigned = 195;
         int trans = unsigned > 127 ? unsigned - 256 : unsigned;
 
         ModelData s1 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
@@ -282,12 +291,12 @@ public class ModelHandler
         ModelData s3 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
         short shadowFaceColour = s1.getFaceColors()[0];
         short shadowReplace = JagexColor.packHSL(0, 0, 0);
-        // Significantly larger than the cloud disc so neighbouring shadows always overlap by
-        // a wide margin — that pushes the visible polygon edges far apart so what the player
-        // perceives is just the overlap *interior*, which is the soft uniform region.
-        cloudShadowModel  = s1.scale(2400, 1, 2400).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).light();
-        cloudShadowModel2 = s2.scale(2800, 1, 2800).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).rotateY90Ccw().light();
-        cloudShadowModel3 = s3.scale(2600, 1, 2600).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).rotateY180Ccw().light();
+        // Larger than the cloud puffs but smaller than before — wide enough that neighbouring
+        // shadow polygon edges overlap (keeps the soft-blend look) but small enough that the
+        // average tile only gets covered by ~4-5 stacks instead of ~7-8.
+        cloudShadowModel  = s1.scale(1700, 1, 1700).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).light();
+        cloudShadowModel2 = s2.scale(2000, 1, 2000).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).rotateY90Ccw().light();
+        cloudShadowModel3 = s3.scale(1850, 1, 1850).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).rotateY180Ccw().light();
         byte[] t1 = s1.getFaceTransparencies();
         byte[] t2 = s2.getFaceTransparencies();
         byte[] t3 = s3.getFaceTransparencies();
@@ -300,15 +309,19 @@ public class ModelHandler
     {
         if (config == null)
         {
-            return storm ? 410 : 256;
+            return storm ? 1500 : 1200;
         }
+        // Tall enough that individual streaks reach from ground level up past the top of the
+        // typical camera frame — that hides the "hard cutoff" the user saw where rain just
+        // ended in mid-sky. Below ~1000 units the cutoff is unavoidable; at 1200+ each streak
+        // crosses the whole visible sky band so the cutoff sits off-camera.
         switch (config.weatherIntensity())
         {
-            case LIGHT:    return storm ? 320 : 200;
+            case LIGHT:    return storm ? 1100 : 900;
             default:
-            case MODERATE: return storm ? 410 : 256;
-            case HEAVY:    return storm ? 560 : 360;
-            case EXTREME:  return storm ? 760 : 500;
+            case MODERATE: return storm ? 1500 : 1200;
+            case HEAVY:    return storm ? 2000 : 1700;
+            case EXTREME:  return storm ? 2800 : 2400;
         }
     }
 

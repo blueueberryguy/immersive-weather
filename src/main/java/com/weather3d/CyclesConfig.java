@@ -74,7 +74,7 @@ public interface CyclesConfig extends Config {
 	)
 	default boolean toggleOverlay()
 	{
-		return true;
+		return false;
 	}
 
 	@ConfigItem(
@@ -335,7 +335,7 @@ public interface CyclesConfig extends Config {
 	@Range(max = 2000)
 	default int rainDensity()
 	{
-		return 1200;
+		return 1800;
 	}
 
 	@ConfigItem(
@@ -348,7 +348,7 @@ public interface CyclesConfig extends Config {
 	@Range(max = 3000)
 	default int stormDensity()
 	{
-		return 1200;
+		return 2400;
 	}
 
 	@ConfigItem(
@@ -423,7 +423,7 @@ public interface CyclesConfig extends Config {
 	)
 	default boolean enableAsh()
 	{
-		return false;
+		return true;
 	}
 
 	@ConfigItem(
@@ -448,7 +448,7 @@ public interface CyclesConfig extends Config {
 	)
 	default boolean enableFog()
 	{
-		return false;
+		return true;
 	}
 
 	@ConfigItem(
