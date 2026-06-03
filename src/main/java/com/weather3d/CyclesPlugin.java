@@ -17,6 +17,7 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
@@ -61,6 +62,15 @@ public class CyclesPlugin extends Plugin
 	private PluginManager pluginManager;
 	@Inject
 	private ModelHandler modelHandler;
+	@Inject
+	private SkyboxController skyboxController;
+	@Inject
+	private WeatherTintOverlay weatherTintOverlay;
+	@Inject
+	private EventBus eventBus;
+
+	/** Tracks whether we toggled off the stock Skybox plugin so we can restore it on shutdown. */
+	private boolean stockSkyboxWasEnabled = false;
 
 	private final Random random = new Random();
 	private final ArrayList<WeatherManager> weatherManagerList = new ArrayList<>();
@@ -75,6 +85,10 @@ public class CyclesPlugin extends Plugin
 	private final int OBJ_ROTATION_CONSTANT = 20;
 	private final int MODEL_TRANSPARENT_SWAP_DISTANCE = 3000;
 	private final int MODEL_DISAPPEAR_DISTANCE = 2500;
+	// Sub-tile units per client tick. 1 tile = 128 units; at ~50 fps this is ~1 tile every ~7s.
+	// Slight Y component so the wind isn't a pure cardinal direction (more natural-feeling).
+	private static final float CLOUD_WIND_X_PER_FRAME = 0.4f;
+	private static final float CLOUD_WIND_Y_PER_FRAME = 0.12f;
 	private final int FOG_RADIUS = 100;
 
 	@Getter
@@ -89,6 +103,11 @@ public class CyclesPlugin extends Plugin
 	{
 		overlayManager.add(cyclesOverlay);
 		overlayManager.add(lightningOverlay);
+		overlayManager.add(weatherTintOverlay);
+		eventBus.register(skyboxController);
+		skyboxController.reset();
+
+		toggleStockSkyboxIfNeeded(true);
 
 		if (client.getLocalPlayer() != null)
 		{
@@ -105,6 +124,12 @@ public class CyclesPlugin extends Plugin
 		clientThread.invoke(this::clearAllWeatherManagers);
 		overlayManager.remove(cyclesOverlay);
 		overlayManager.remove(lightningOverlay);
+		overlayManager.remove(weatherTintOverlay);
+		eventBus.unregister(skyboxController);
+		// Hand the sky back to whatever was managing it before us.
+		clientThread.invoke(() -> client.setSkyboxColor(0));
+
+		restoreStockSkybox();
 	}
 
 	@Subscribe
@@ -119,29 +144,101 @@ public class CyclesPlugin extends Plugin
 					|| weatherType == Weather.PARTLY_CLOUDY
 					|| weatherType == Weather.STARRY)
 			{
-				LocalPoint localPoint = new LocalPoint(client.getCameraX(), client.getCameraY());
+				LocalPoint cameraPoint = new LocalPoint(client.getCameraX(), client.getCameraY());
+				boolean driftEnabled = (weatherType == Weather.CLOUDY || weatherType == Weather.PARTLY_CLOUDY);
+				int plane = client.getPlane();
 
 				for (WeatherObject weatherObject : weatherManager.getWeatherObjArray())
 				{
 					RuneLiteObject runeLiteObject = weatherObject.getRuneLiteObject();
+					RuneLiteObject shadowObject = weatherObject.getShadowObject();
 					int objectVariant = weatherObject.getObjVariant();
-					int distance = runeLiteObject.getLocation().distanceTo(localPoint);
 
-					if (distance < MODEL_DISAPPEAR_DISTANCE)
+					// Drift: slide clouds across the sky each client-tick. baseX/baseY are the
+					// spawn anchor; we add accumulated driftX so motion is sub-tile-smooth even at
+					// frame rate. When a cloud sails off the scene we wrap it to the upwind edge
+					// so the world stays populated without obvious pop-in.
+					if (driftEnabled)
 					{
-						runeLiteObject.setActive(false);
-						continue;
+						if (weatherObject.getBaseX() == WeatherObject.UNSET_BASE)
+						{
+							LocalPoint anchor = runeLiteObject.getLocation();
+							weatherObject.setBaseX(anchor.getX());
+							weatherObject.setBaseY(anchor.getY());
+						}
+
+						weatherObject.setDriftX(weatherObject.getDriftX() + CLOUD_WIND_X_PER_FRAME);
+						weatherObject.setDriftY(weatherObject.getDriftY() + CLOUD_WIND_Y_PER_FRAME);
+
+						int newX = weatherObject.getBaseX() + (int) weatherObject.getDriftX();
+						int newY = weatherObject.getBaseY() + (int) weatherObject.getDriftY();
+
+						int sceneMax = Constants.SCENE_SIZE * Perspective.LOCAL_TILE_SIZE;
+						int wrapPad = 8 * Perspective.LOCAL_TILE_SIZE; // 8 tiles past the edge before we wrap
+						if (newX > sceneMax + wrapPad)
+						{
+							// Re-anchor to opposite edge so cloud re-enters from upwind without a teleport
+							// the player can see (we're far past the scene boundary at this point).
+							weatherObject.setBaseX(weatherObject.getBaseX() - (sceneMax + 2 * wrapPad));
+							newX = weatherObject.getBaseX() + (int) weatherObject.getDriftX();
+						}
+						else if (newX < -wrapPad)
+						{
+							weatherObject.setBaseX(weatherObject.getBaseX() + (sceneMax + 2 * wrapPad));
+							newX = weatherObject.getBaseX() + (int) weatherObject.getDriftX();
+						}
+						if (newY > sceneMax + wrapPad)
+						{
+							weatherObject.setBaseY(weatherObject.getBaseY() - (sceneMax + 2 * wrapPad));
+							newY = weatherObject.getBaseY() + (int) weatherObject.getDriftY();
+						}
+						else if (newY < -wrapPad)
+						{
+							weatherObject.setBaseY(weatherObject.getBaseY() + (sceneMax + 2 * wrapPad));
+							newY = weatherObject.getBaseY() + (int) weatherObject.getDriftY();
+						}
+
+						LocalPoint drifted = new LocalPoint(newX, newY);
+						runeLiteObject.setLocation(drifted, plane);
+						if (shadowObject != null)
+							shadowObject.setLocation(drifted, plane);
 					}
 
-					runeLiteObject.setActive(true);
+					// Clouds always stay rendered: never blink them off by camera distance, that's
+					// what was making shadows flicker as the camera panned. The transparent variant
+					// at close range still keeps the player's view clean from below.
+					int distance = runeLiteObject.getLocation().distanceTo(cameraPoint);
 
-					if (distance < MODEL_TRANSPARENT_SWAP_DISTANCE)
+					if (driftEnabled)
 					{
-						runeLiteObject.setModel(modelHandler.getTransparentModel(weatherType, objectVariant));
-						continue;
-					}
+						runeLiteObject.setActive(true);
+						if (shadowObject != null)
+							shadowObject.setActive(config.enableCloudShadows());
 
-					runeLiteObject.setModel(modelHandler.getRegularModel(weatherType, objectVariant));
+						if (distance < MODEL_TRANSPARENT_SWAP_DISTANCE)
+							runeLiteObject.setModel(modelHandler.getTransparentModel(weatherType, objectVariant));
+						else
+							runeLiteObject.setModel(modelHandler.getRegularModel(weatherType, objectVariant));
+					}
+					else
+					{
+						// STARRY keeps the original near-camera hide behaviour (no shadows for stars).
+						if (distance < MODEL_DISAPPEAR_DISTANCE)
+						{
+							runeLiteObject.setActive(false);
+							continue;
+						}
+
+						runeLiteObject.setActive(true);
+
+						if (distance < MODEL_TRANSPARENT_SWAP_DISTANCE)
+						{
+							runeLiteObject.setModel(modelHandler.getTransparentModel(weatherType, objectVariant));
+							continue;
+						}
+
+						runeLiteObject.setModel(modelHandler.getRegularModel(weatherType, objectVariant));
+					}
 				}
 			}
 		}
@@ -378,6 +475,49 @@ public class CyclesPlugin extends Plugin
 				}
 			});
 		}
+
+		// When intensity changes, rain droplet length is baked into the model so we need to
+		// rebuild the models. Same when shadow opacity changes.
+		if (key.equals("weatherIntensity"))
+		{
+			clientThread.invoke(modelHandler::loadModels);
+		}
+
+		if (key.equals("cloudShadowOpacity"))
+		{
+			clientThread.invoke(modelHandler::rebuildCloudShadowModels);
+		}
+
+		// Clearing or restoring shadows on toggle.
+		if (key.equals("enableCloudShadows"))
+		{
+			clientThread.invoke(() -> {
+				for (WeatherManager wm : weatherManagerList)
+				{
+					for (WeatherObject wo : wm.getWeatherObjArray())
+					{
+						RuneLiteObject shadow = wo.getShadowObject();
+						if (shadow != null)
+							shadow.setActive(config.enableCloudShadows());
+					}
+				}
+			});
+		}
+
+		if (key.equals("enableSkybox"))
+		{
+			skyboxController.reset();
+			if (!config.enableSkybox())
+				clientThread.invoke(() -> client.setSkyboxColor(0));
+		}
+
+		if (key.equals("disableStockSkybox"))
+		{
+			if (config.disableStockSkybox())
+				toggleStockSkyboxIfNeeded(true);
+			else
+				restoreStockSkybox();
+		}
 	}
 
 	private int getAmbientVolume()
@@ -561,29 +701,51 @@ public class CyclesPlugin extends Plugin
 
 	public int getObjectTarget(Weather weather)
 	{
+		int base;
 		switch (weather)
 		{
 			case ASHFALL:
-				return config.ashfallDensity();
+				base = config.ashfallDensity(); break;
 			case FOGGY:
-				return config.foggyDensity();
+				base = config.foggyDensity(); break;
 			case RAINY:
-				return config.rainDensity();
+				base = config.rainDensity(); break;
 			case SNOWY:
-				return config.snowDensity();
+				base = config.snowDensity(); break;
 			case CLOUDY:
-				return config.cloudyDensity();
+				base = config.cloudyDensity(); break;
 			case STARRY:
-				return config.starryDensity();
+				base = config.starryDensity(); break;
 			case STORMY:
-				return config.stormDensity();
+				base = config.stormDensity(); break;
 			case PARTLY_CLOUDY:
-				return config.partlyCloudyDensity();
+				base = config.partlyCloudyDensity(); break;
 			default:
 			case SUNNY:
 			case COVERED:
 				return 0;
 		}
+
+		// Scale precipitation density with the master intensity so EXTREME genuinely fills the
+		// air. Clouds/fog/stars don't get scaled because the per-weather sliders already make
+		// sense as-is for those (and clouds use the dedicated shadow path).
+		if (weather == Weather.RAINY || weather == Weather.STORMY || weather == Weather.SNOWY || weather == Weather.ASHFALL)
+		{
+			float scale;
+			switch (config.weatherIntensity())
+			{
+				case LIGHT:    scale = 0.45f; break;
+				default:
+				case MODERATE: scale = 1.0f; break;
+				case HEAVY:    scale = 1.5f; break;
+				case EXTREME:  scale = 2.0f; break;
+			}
+			int max = weather.getMaxObjects();
+			int scaled = (int) (base * scale);
+			return Math.min(scaled, max);
+		}
+
+		return base;
 	}
 
 	public int getVolumeGoal(boolean muffled, Weather weather)
@@ -777,7 +939,24 @@ public class CyclesPlugin extends Plugin
 		runeLiteObject.setLocation(lp, plane);
 		runeLiteObject.setShouldLoop(true);
 		runeLiteObject.setActive(true);
-		return new WeatherObject(runeLiteObject, objectVariant);
+
+		WeatherObject wo = new WeatherObject(runeLiteObject, objectVariant);
+
+		// Clouds get a paired ground-shadow object sitting on the same tile at z=0. The shadow
+		// model itself is pre-flattened and translated to the floor, so we just place a flat
+		// dark disc that visually reads as the cloud's shadow on the terrain.
+		if ((weather == Weather.CLOUDY || weather == Weather.PARTLY_CLOUDY) && config.enableCloudShadows())
+		{
+			RuneLiteObject shadow = client.createRuneLiteObject();
+			shadow.setModel(modelHandler.getCloudShadowModel(objectVariant));
+			shadow.setRadius(0);
+			shadow.setDrawFrontTilesFirst(false);
+			shadow.setLocation(lp, plane);
+			shadow.setActive(true);
+			wo.setShadowObject(shadow);
+		}
+
+		return wo;
 	}
 
 	public void removeWeatherObject(int index, ArrayList<WeatherObject> weatherArray)
@@ -786,7 +965,11 @@ public class CyclesPlugin extends Plugin
 			return;
 
 		WeatherObject weatherObject = weatherArray.get(index);
-		clientThread.invokeLater(() -> weatherObject.getRuneLiteObject().setActive(false));
+		clientThread.invokeLater(() -> {
+			weatherObject.getRuneLiteObject().setActive(false);
+			if (weatherObject.getShadowObject() != null)
+				weatherObject.getShadowObject().setActive(false);
+		});
 		weatherArray.remove(index);
 	}
 
@@ -795,7 +978,11 @@ public class CyclesPlugin extends Plugin
 		ArrayList<WeatherObject> array = weatherManager.getWeatherObjArray();
 
 		for (WeatherObject weatherObject : array)
+		{
 			weatherObject.getRuneLiteObject().setActive(false);
+			if (weatherObject.getShadowObject() != null)
+				weatherObject.getShadowObject().setActive(false);
+		}
 
 		array.clear();
 	}
@@ -841,6 +1028,10 @@ public class CyclesPlugin extends Plugin
 			RuneLiteObject runeLiteObject = weatherObject.getRuneLiteObject();
 			runeLiteObject.setLocation(nextTile.getLocalLocation(), z);
 			runeLiteObject.setAnimation(modelHandler.getWeatherAnimation(weather));
+			if (weatherObject.getShadowObject() != null)
+			{
+				weatherObject.getShadowObject().setLocation(nextTile.getLocalLocation(), z);
+			}
 		}
 
 		weatherManager.setStartRotation(beginRotation + numToRelocate);
@@ -1118,6 +1309,84 @@ public class CyclesPlugin extends Plugin
 				{}
 				break;
 		}
+	}
+
+	/**
+	 * 0..1 multiplier driven by the WeatherIntensity config. Used by the skybox, tint, rain model
+	 * lengths and cloud shadow strength so a single dial moves the whole "vibe" in lockstep.
+	 */
+	public float getIntensityMultiplier()
+	{
+		switch (config.weatherIntensity())
+		{
+			case LIGHT:    return 0.35f;
+			default:
+			case MODERATE: return 0.65f;
+			case HEAVY:    return 0.9f;
+			case EXTREME:  return 1.0f;
+		}
+	}
+
+	/**
+	 * If the stock RuneLite "Skybox" plugin is enabled, turn it off so we get exclusive control
+	 * of {@code client.setSkyboxColor}. Remember its prior state so we can restore on shutdown.
+	 */
+	private void toggleStockSkyboxIfNeeded(boolean takingOver)
+	{
+		if (!config.disableStockSkybox() || !config.enableSkybox())
+			return;
+
+		Plugin stock = pluginManager.getPlugins().stream()
+			.filter(p -> "Skybox".equals(p.getClass().getAnnotation(PluginDescriptor.class) != null
+				? p.getClass().getAnnotation(PluginDescriptor.class).name() : ""))
+			.findFirst().orElse(null);
+
+		if (stock == null)
+			return;
+
+		if (takingOver && pluginManager.isPluginEnabled(stock))
+		{
+			stockSkyboxWasEnabled = true;
+			SwingUtilities.invokeLater(() -> {
+				try
+				{
+					pluginManager.setPluginEnabled(stock, false);
+					pluginManager.stopPlugin(stock);
+				}
+				catch (Exception e)
+				{
+					log.warn("Failed to stop stock Skybox plugin", e);
+				}
+			});
+		}
+	}
+
+	private void restoreStockSkybox()
+	{
+		if (!stockSkyboxWasEnabled)
+			return;
+
+		Plugin stock = pluginManager.getPlugins().stream()
+			.filter(p -> "Skybox".equals(p.getClass().getAnnotation(PluginDescriptor.class) != null
+				? p.getClass().getAnnotation(PluginDescriptor.class).name() : ""))
+			.findFirst().orElse(null);
+
+		if (stock == null)
+			return;
+
+		final Plugin toStart = stock;
+		SwingUtilities.invokeLater(() -> {
+			try
+			{
+				pluginManager.setPluginEnabled(toStart, true);
+				pluginManager.startPlugin(toStart);
+			}
+			catch (Exception e)
+			{
+				log.warn("Failed to re-enable stock Skybox plugin", e);
+			}
+		});
+		stockSkyboxWasEnabled = false;
 	}
 
 	@Provides

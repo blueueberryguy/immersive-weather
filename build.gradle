@@ -32,3 +32,11 @@ sourceCompatibility = '1.9'
 tasks.withType(JavaCompile) {
 	options.encoding = 'UTF-8'
 }
+
+tasks.register('runRuneLite', JavaExec) {
+	group = 'application'
+	description = 'Launches the dev RuneLite client with the 3D Weather plugin sideloaded'
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.weather3d.CyclesTest'
+	jvmArgs = ['-ea', '-Djava.net.preferIPv4Stack=true']
+}

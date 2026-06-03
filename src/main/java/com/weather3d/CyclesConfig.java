@@ -27,6 +27,13 @@ public interface CyclesConfig extends Config {
 		WINTER
 	}
 
+	enum WeatherIntensity {
+		LIGHT,
+		MODERATE,
+		HEAVY,
+		EXTREME
+	}
+
 	@ConfigSection(
 			name = "General",
 			description = "General settings",
@@ -92,6 +99,113 @@ public interface CyclesConfig extends Config {
 	default boolean disableWeatherUnderground()
 	{
 		return true;
+	}
+
+	@ConfigSection(
+			name = "Sky & Lighting",
+			description = "Skybox and atmospheric tinting",
+			position = 55
+	)
+	String skySettings = "skySettings";
+
+	@ConfigItem(
+			keyName = "enableSkybox",
+			name = "Control Skybox",
+			description = "Lets 3D Weather control the skybox colour based on current weather",
+			section = skySettings,
+			position = 1
+	)
+	default boolean enableSkybox()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+			keyName = "disableStockSkybox",
+			name = "Disable RuneLite Skybox",
+			description = "Automatically disables RuneLite's stock Skybox plugin while 3D Weather is running, so the sky is fully controlled here",
+			section = skySettings,
+			position = 2
+	)
+	default boolean disableStockSkybox()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+			keyName = "skyTransitionSpeed",
+			name = "Sky Transition Speed",
+			description = "How quickly the sky colour eases between weathers (1 = slow & dreamy, 20 = snappy)",
+			section = skySettings,
+			position = 3
+	)
+	@Range(min = 1, max = 20)
+	default int skyTransitionSpeed()
+	{
+		return 5;
+	}
+
+	@ConfigItem(
+			keyName = "enableWeatherTint",
+			name = "Enable Weather Tint",
+			description = "Adds a screen-space tint that darkens during rain/storms and brightens-but-fogs during snow",
+			section = skySettings,
+			position = 4
+	)
+	default boolean enableWeatherTint()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+			keyName = "weatherTintStrength",
+			name = "Weather Tint Strength",
+			description = "Maximum intensity of the screen tint at the densest weather settings",
+			section = skySettings,
+			position = 5
+	)
+	@Units(Units.PERCENT)
+	@Range(max = 100)
+	default int weatherTintStrength()
+	{
+		return 100;
+	}
+
+	@ConfigItem(
+			keyName = "enableCloudShadows",
+			name = "Cloud Shadows",
+			description = "Casts dark shadow patches on the ground beneath clouds",
+			section = skySettings,
+			position = 6
+	)
+	default boolean enableCloudShadows()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+			keyName = "cloudShadowOpacity",
+			name = "Cloud Shadow Opacity",
+			description = "Darkness of the cast cloud shadows (low = barely-there tint, high = WoW-style dark patches)",
+			section = skySettings,
+			position = 7
+	)
+	@Range(min = 5, max = 100)
+	default int cloudShadowOpacity()
+	{
+		return 25;
+	}
+
+	@ConfigItem(
+			keyName = "weatherIntensity",
+			name = "Weather Intensity",
+			description = "Master intensity for rain/snow/storm look (also scales density, droplet length, sky darkness)",
+			section = skySettings,
+			position = 8
+	)
+	default WeatherIntensity weatherIntensity()
+	{
+		return WeatherIntensity.MODERATE;
 	}
 
 	@ConfigSection(
@@ -196,7 +310,7 @@ public interface CyclesConfig extends Config {
 	@Range(max = 2000)
 	default int rainDensity()
 	{
-		return 400;
+		return 1200;
 	}
 
 	@ConfigItem(
@@ -209,7 +323,7 @@ public interface CyclesConfig extends Config {
 	@Range(max = 3000)
 	default int stormDensity()
 	{
-		return 600;
+		return 1200;
 	}
 
 	@ConfigItem(
@@ -234,7 +348,7 @@ public interface CyclesConfig extends Config {
 	@Range(max = 2000)
 	default int snowDensity()
 	{
-		return 400;
+		return 1200;
 	}
 
 	@ConfigItem(
