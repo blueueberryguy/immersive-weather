@@ -40,7 +40,11 @@ import static com.immersiveweather.audio.SoundEffect.*;
 @PluginDescriptor(
 	name = "Immersive Weather",
 	description = "Atmospheric weather with day/night cycle, aurora, ground accumulation, and dynamic skybox",
-	tags = {"immersion", "weather", "ambience", "audio", "graphics", "skybox", "day", "night", "aurora"}
+	tags = {"immersion", "weather", "ambience", "audio", "graphics", "skybox", "day", "night", "aurora"},
+	// Explicit configName so RuneLite stores enable-state under "immersiveweather" instead of
+	// the class simple name "cyclesplugin" — which the legacy "3D Weather" fork also uses, and
+	// which carries any previous "false" forward into this plugin after the rename.
+	configName = "ImmersiveWeather"
 )
 public class CyclesPlugin extends Plugin
 {
@@ -96,6 +100,13 @@ public class CyclesPlugin extends Plugin
 	// Fog drifts much slower than clouds — it should look airy and creeping, not blown along.
 	private static final float FOG_WIND_X_PER_FRAME = 0.13f;
 	private static final float FOG_WIND_Y_PER_FRAME = 0.05f;
+	// Snow vertical fall. We override RuneLiteObject's Z each tick to make particles physically
+	// descend — RuneLite's built-in animations only loop vertices in place, so we can't piggyback
+	// the rain animation without inheriting its streak geometry. Spawn altitude is high enough
+	// to read as "falling from the sky" at any reasonable zoom; fall speed is ~75 units/sec at
+	// 50fps which feels like soft drifting snow rather than rain.
+	private static final int   SNOW_SPAWN_HEIGHT = -700;
+	private static final float SNOW_FALL_PER_FRAME = 1.5f;
 	private final int FOG_RADIUS = 100;
 
 	@Getter
@@ -153,18 +164,26 @@ public class CyclesPlugin extends Plugin
 					|| weatherType == Weather.PARTLY_CLOUDY
 					|| weatherType == Weather.STARRY
 					|| weatherType == Weather.FOGGY
-					|| weatherType == Weather.AURORA)
+					|| weatherType == Weather.AURORA
+					|| weatherType == Weather.SNOWY)
 			{
 				LocalPoint cameraPoint = new LocalPoint(client.getCameraX(), client.getCameraY());
 				boolean isCloud = (weatherType == Weather.CLOUDY || weatherType == Weather.PARTLY_CLOUDY);
 				boolean isFog = (weatherType == Weather.FOGGY);
 				boolean isAurora = (weatherType == Weather.AURORA);
-				boolean driftEnabled = isCloud || isFog || isAurora;
+				boolean isSnow = (weatherType == Weather.SNOWY);
+				boolean driftEnabled = isCloud || isFog || isAurora || isSnow;
 				int plane = client.getPlane();
-				// Fog creeps; aurora flows. Aurora's a flowing curtain — at fog × 1.5 it's
-				// visible motion (around 1 tile every 13s) but still smoother than cloud wind.
-				float windX = isAurora ? FOG_WIND_X_PER_FRAME * 1.5f : (isFog ? FOG_WIND_X_PER_FRAME : CLOUD_WIND_X_PER_FRAME);
-				float windY = isAurora ? FOG_WIND_Y_PER_FRAME * 1.5f : (isFog ? FOG_WIND_Y_PER_FRAME : CLOUD_WIND_Y_PER_FRAME);
+				// Per-weather wind speeds. Aurora flows (×1.5 fog). Fog creeps (×1.0). Snow drifts
+				// slightly faster than fog to read as "wind-blown snow" (~×1.3). Clouds at base.
+				float windX = isAurora ? FOG_WIND_X_PER_FRAME * 1.5f
+						: isFog ? FOG_WIND_X_PER_FRAME
+						: isSnow ? FOG_WIND_X_PER_FRAME * 1.3f
+						: CLOUD_WIND_X_PER_FRAME;
+				float windY = isAurora ? FOG_WIND_Y_PER_FRAME * 1.5f
+						: isFog ? FOG_WIND_Y_PER_FRAME
+						: isSnow ? FOG_WIND_Y_PER_FRAME * 1.3f
+						: CLOUD_WIND_Y_PER_FRAME;
 
 				for (WeatherObject weatherObject : weatherManager.getWeatherObjArray())
 				{
@@ -227,11 +246,36 @@ public class CyclesPlugin extends Plugin
 					// at close range still keeps the player's view clean from below.
 					int distance = runeLiteObject.getLocation().distanceTo(cameraPoint);
 
-					if (isFog || isAurora)
+					if (isFog || isAurora || isSnow)
 					{
-						// Fog/aurora: always-on, no TP variant (already heavily translucent at all
-						// distances), no shadow tracking. Drift was applied above.
+						// Fog/aurora/snow: always-on, no TP variant (already translucent), and the
+						// shadow slot for snow holds the ground accumulation disc which we DO want
+						// to keep active (config.enableSnowAccumulation gates spawn time, not here).
 						runeLiteObject.setActive(true);
+						if (isSnow && shadowObject != null)
+							shadowObject.setActive(config.enableSnowAccumulation());
+
+						// Snow: drive vertical motion manually. setLocation above just reset Z to
+						// tile floor — we override here to apply the current fall altitude. fallY
+						// is randomised on first sight so particles aren't synchronised across the
+						// scene. When a particle reaches the floor, respawn at top so falling loops.
+						if (isSnow)
+						{
+							float fallY = weatherObject.getFallY();
+							if (Float.isNaN(fallY))
+							{
+								// Spread initial altitudes across the spawn band so the scene
+								// looks pre-populated rather than all-flakes-at-top.
+								fallY = SNOW_SPAWN_HEIGHT * random.nextFloat();
+							}
+							fallY += SNOW_FALL_PER_FRAME;
+							if (fallY >= 0f)
+							{
+								fallY = SNOW_SPAWN_HEIGHT;
+							}
+							weatherObject.setFallY(fallY);
+							runeLiteObject.setZ(runeLiteObject.getZ() + (int) fallY);
+						}
 					}
 					else if (isCloud)
 					{

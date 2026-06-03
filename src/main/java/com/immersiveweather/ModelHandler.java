@@ -163,32 +163,37 @@ public class ModelHandler
         fogModel3 = fogModelData3.scale(440, 80, 440).translate(0, -45, 0).rotateY180Ccw()
             .light(235, 70, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
 
-        // Snow: Wintertodt ice-burst model + animation (27835/7000). The model's natural geometry
-        // has spiky points — at default lighting they read as 4-pointed sparkles ("star-like").
-        // We rely on flat lighting (high ambient, low contrast) to soften the spikes into a
-        // fluffy puff silhouette. We DON'T cloneTransparencies on this model: the Wintertodt
-        // cache model has no transparency array, so attempting to Arrays.fill the result
-        // throws NPE and aborts loadModels(), leaving every weather visual broken.
-        // Lift values are deliberately small so the burst sits just above the tile surface and
-        // particles overlap with the ground rather than hovering above it.
-        short snowWhite = JagexColor.packHSL(0, 0, 118);
-        ModelData snowModelData  = client.loadModelData(SNOW_MODEL).cloneVertices().cloneColors();
-        ModelData snowModelData2 = client.loadModelData(SNOW_MODEL).cloneVertices().cloneColors();
-        ModelData snowModelData3 = client.loadModelData(SNOW_MODEL).cloneVertices().cloneColors();
+        // Snow: switched from CLOUD_MODEL to STAR_MODEL (16374). The cloud model + cloud
+        // animation combination kept reading as "falling clouds" rather than snow because:
+        //   (a) cloud geometry is a rounded BLOB — at small scale it's still a soft puff, not
+        //       a discrete speck
+        //   (b) cloud animation morphs the shape continuously, exaggerating the blob effect
+        // STAR_MODEL is small spherical/orb geometry — exactly the shape needed for distinct
+        // snowflake dots. Blanket-filled to bright white, kept opaque per-face, scaled small.
+        // The star animation (used at the bottom of this method via STAR_ANIMATION) is a
+        // subtle twinkle that doesn't morph the silhouette.
+        short snowWhite = JagexColor.packHSL(0, 0, 125);
+        ModelData snowModelData  = client.loadModelData(STAR_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        ModelData snowModelData2 = client.loadModelData(STAR_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        ModelData snowModelData3 = client.loadModelData(STAR_MODEL).cloneVertices().cloneColors().cloneTransparencies();
         Arrays.fill(snowModelData.getFaceColors(),  snowWhite);
         Arrays.fill(snowModelData2.getFaceColors(), snowWhite);
         Arrays.fill(snowModelData3.getFaceColors(), snowWhite);
+        // Per-face -120 (≈53% opaque) — solid enough that small specks read clearly against
+        // any background, but still soft-edged.
+        Arrays.fill(snowModelData.getFaceTransparencies(),  (byte) -120);
+        Arrays.fill(snowModelData2.getFaceTransparencies(), (byte) -120);
+        Arrays.fill(snowModelData3.getFaceTransparencies(), (byte) -120);
         int snowScale = snowScaleFor();
-        int snowLift  = snowLiftFor();
-        // light(ambient=230 high, contrast=120 very low) flattens shading so the model reads
-        // as a uniform white blob rather than a faceted crystal. Default ambient/contrast are
-        // 64/768.
-        snowModel  = snowModelData.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0)
-            .light(230, 120, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
-        snowModel2 = snowModelData2.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).rotateY90Ccw()
-            .light(230, 120, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
-        snowModel3 = snowModelData3.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).rotateY270Ccw()
-            .light(230, 120, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        // No translate — CyclesPlugin drives true vertical fall via runeLiteObject.setZ() each
+        // tick. Match the star model's natural lighting (default ambient, high contrast)
+        // so the orb has a subtle bright-spot which reads as a sparkle on the snowflake.
+        snowModel  = snowModelData.scale(snowScale, snowScale, snowScale)
+            .light(ModelData.DEFAULT_AMBIENT, 1400, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        snowModel2 = snowModelData2.scale((int)(snowScale * 0.85f), (int)(snowScale * 0.85f), (int)(snowScale * 0.85f))
+            .light(ModelData.DEFAULT_AMBIENT, 1400, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        snowModel3 = snowModelData3.scale((int)(snowScale * 1.15f), (int)(snowScale * 1.15f), (int)(snowScale * 1.15f))
+            .light(ModelData.DEFAULT_AMBIENT, 1400, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
 
         // Ground snow accumulation: paired with each snow particle (via WeatherObject's shadow
         // slot in CyclesPlugin), so as more flakes spawn the world gets a soft cumulative white
@@ -291,7 +296,10 @@ public class ModelHandler
         cloudAnimation = client.loadAnimation(CLOUD_ANIMATION);
         fogAnimation = client.loadAnimation(CLOUD_ANIMATION);
         rainAnimation = client.loadAnimation(RAIN_ANIMATION);
-        snowAnimation = client.loadAnimation(SNOW_ANIMATION);
+        // STAR_ANIMATION pairs with our snow's new STAR_MODEL geometry. It's a subtle twinkle
+        // that doesn't morph the orb silhouette — exactly what we want for discrete snowflakes
+        // rather than the cloud animation's shape-changing morph.
+        snowAnimation = client.loadAnimation(STAR_ANIMATION);
         starAnimation = client.loadAnimation(STAR_ANIMATION);
         // Back to CLOUD_ANIMATION — FOG_ANIMATION was deforming the long ribbon geometry in
         // jerky steps that read as "twitching" rather than the slow buttery aurora drift we
@@ -365,41 +373,24 @@ public class ModelHandler
         }
     }
 
-    /** Uniform XYZ scale for the Wintertodt ice-burst snow puff per intensity. */
+    /**
+     * Uniform XYZ scale for a star-model snowflake at the chosen weather intensity. STAR_MODEL
+     * at scale 80 gives the existing celestial-star size; we go smaller (40-70) so snowflakes
+     * read as discrete white specks rather than orbs.
+     */
     private int snowScaleFor()
     {
         if (config == null)
         {
-            return 200;
-        }
-        switch (config.weatherIntensity())
-        {
-            case LIGHT:    return 160;
-            default:
-            case MODERATE: return 200;
-            case HEAVY:    return 240;
-            case EXTREME:  return 280;
-        }
-    }
-
-    /**
-     * How far above the tile the burst origin sits. Kept small (40-100) so the burst overlaps
-     * the ground and particles look like they actually land — earlier higher lift values left
-     * snow hovering visibly above the floor.
-     */
-    private int snowLiftFor()
-    {
-        if (config == null)
-        {
-            return 60;
+            return 50;
         }
         switch (config.weatherIntensity())
         {
             case LIGHT:    return 40;
             default:
-            case MODERATE: return 60;
-            case HEAVY:    return 85;
-            case EXTREME:  return 110;
+            case MODERATE: return 50;
+            case HEAVY:    return 65;
+            case EXTREME:  return 80;
         }
     }
 

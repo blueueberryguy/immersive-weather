@@ -29,6 +29,14 @@ public class WeatherObject
     @Setter
     private float driftY = 0f;
 
+    /**
+     * Vertical altitude in world units used for snow's true falling motion. Negative = above
+     * ground, 0 = at ground. NaN means "not yet initialised" — CyclesPlugin randomises on the
+     * first tick so particles aren't all falling in lockstep.
+     */
+    @Setter
+    private float fallY = Float.NaN;
+
     public WeatherObject(RuneLiteObject runeLiteObject, int objVariant)
     {
         this.runeLiteObject = runeLiteObject;
