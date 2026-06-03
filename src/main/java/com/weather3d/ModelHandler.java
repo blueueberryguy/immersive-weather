@@ -27,6 +27,9 @@ public class ModelHandler
     private Model cloudShadowModel;
     private Model cloudShadowModel2;
     private Model cloudShadowModel3;
+    private Model snowGroundModel;
+    private Model snowGroundModel2;
+    private Model snowGroundModel3;
     private Model fogModel;
     private Model fogModel2;
     private Model fogModel3;
@@ -141,18 +144,15 @@ public class ModelHandler
         Arrays.fill(fogTransparency2, (byte) -25);
         Arrays.fill(fogTransparency3, (byte) -25);
 
-        // Snow: back to the Wintertodt ice-burst model + animation (27835/7000) — the rain model
-        // approach was always going to read as rain because the geometry IS rain droplets, even
-        // when recoloured. The Wintertodt model produces little white puff particles which IS
-        // visually what snow looks like. Two changes vs. the very original code so it doesn't
-        // hug the floor like the user complained at the start:
-        //   1. Blanket-fill all face colours to a clean bright white (the original recolor()
-        //      only touched two indices; the rest stayed at the Wintertodt model's defaults).
-        //   2. Translate the model up so the burst origin sits at roughly head height instead
-        //      of below the tile, and scale aggressively up so flakes are clearly visible.
-        // Translation/scale both increase with weatherIntensity so HEAVY/EXTREME feels like a
-        // blizzard while LIGHT is a gentle dusting.
-        short snowWhite = JagexColor.packHSL(0, 0, 115);
+        // Snow: Wintertodt ice-burst model + animation (27835/7000). The model's natural geometry
+        // has spiky points — at default lighting they read as 4-pointed sparkles ("star-like").
+        // We rely on flat lighting (high ambient, low contrast) to soften the spikes into a
+        // fluffy puff silhouette. We DON'T cloneTransparencies on this model: the Wintertodt
+        // cache model has no transparency array, so attempting to Arrays.fill the result
+        // throws NPE and aborts loadModels(), leaving every weather visual broken.
+        // Lift values are deliberately small so the burst sits just above the tile surface and
+        // particles overlap with the ground rather than hovering above it.
+        short snowWhite = JagexColor.packHSL(0, 0, 118);
         ModelData snowModelData  = client.loadModelData(SNOW_MODEL).cloneVertices().cloneColors();
         ModelData snowModelData2 = client.loadModelData(SNOW_MODEL).cloneVertices().cloneColors();
         ModelData snowModelData3 = client.loadModelData(SNOW_MODEL).cloneVertices().cloneColors();
@@ -161,9 +161,20 @@ public class ModelHandler
         Arrays.fill(snowModelData3.getFaceColors(), snowWhite);
         int snowScale = snowScaleFor();
         int snowLift  = snowLiftFor();
-        snowModel  = snowModelData.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).light();
-        snowModel2 = snowModelData2.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).rotateY90Ccw().light();
-        snowModel3 = snowModelData3.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).rotateY270Ccw().light();
+        // light(ambient=230 high, contrast=120 very low) flattens shading so the model reads
+        // as a uniform white blob rather than a faceted crystal. Default ambient/contrast are
+        // 64/768.
+        snowModel  = snowModelData.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0)
+            .light(230, 120, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        snowModel2 = snowModelData2.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).rotateY90Ccw()
+            .light(230, 120, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        snowModel3 = snowModelData3.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).rotateY270Ccw()
+            .light(230, 120, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+
+        // Ground snow accumulation: paired with each snow particle (via WeatherObject's shadow
+        // slot in CyclesPlugin), so as more flakes spawn the world gets a soft cumulative white
+        // dusting. Built here so the opacity config can rebuild on the fly.
+        rebuildSnowGroundModels();
 
         // Rain: longer droplets + darker base colour. Length scales with global intensity.
         int rainYScale = rainHeightFor(false);
@@ -303,20 +314,80 @@ public class ModelHandler
         }
     }
 
-    /** How far above the tile the burst origin sits (lifts snow off the floor so it reads as drifting from above). */
+    /**
+     * How far above the tile the burst origin sits. Kept small (40-100) so the burst overlaps
+     * the ground and particles look like they actually land — earlier higher lift values left
+     * snow hovering visibly above the floor.
+     */
     private int snowLiftFor()
     {
         if (config == null)
         {
-            return 150;
+            return 60;
         }
         switch (config.weatherIntensity())
         {
-            case LIGHT:    return 100;
+            case LIGHT:    return 40;
             default:
-            case MODERATE: return 150;
-            case HEAVY:    return 200;
-            case EXTREME:  return 250;
+            case MODERATE: return 60;
+            case HEAVY:    return 85;
+            case EXTREME:  return 110;
+        }
+    }
+
+    /**
+     * Builds the white flat discs that get paired with each snow particle (one per particle,
+     * sitting at z=0 on the same tile). As more flakes spawn across the scene, these discs
+     * accumulate into a soft white dusting on the ground — even in non-snowy biomes.
+     *
+     * Sizing matters a lot here. With one disc per snow particle (~1200 at default density)
+     * and a 104×104-tile scene, each tile already gets covered by ~10% of the discs by chance.
+     * Earlier we used 1800–2200 scale (≈14 tiles wide), which meant every single tile got
+     * stacked under ~20+ overlapping discs — at that point the opacity slider was useless
+     * because anything above ~90% transparent stacks to opaque. The fix is to make each disc
+     * just 2–3 tiles wide so accumulation builds via *visible overlap* rather than wall-to-wall
+     * coverage.
+     */
+    public void rebuildSnowGroundModels()
+    {
+        int opacityCfg = config == null ? 35 : config.snowAccumulationOpacity();
+        // Map [5..100] onto unsigned [250..150]: at min slider each disc is nearly invisible,
+        // at max the discs are noticeable individually so blizzards genuinely paint the ground.
+        int unsigned = 250 - (int) ((opacityCfg / 100f) * 100);
+        if (unsigned > 255) unsigned = 255;
+        if (unsigned < 130) unsigned = 130;
+        int trans = unsigned > 127 ? unsigned - 256 : unsigned;
+
+        ModelData g1 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        ModelData g2 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        ModelData g3 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
+        // LUMINANCE_MAX so the snow reads as pure white rather than off-white.
+        short snowWhite = JagexColor.packHSL(0, 0, JagexColor.LUMINANCE_MAX);
+        Arrays.fill(g1.getFaceColors(), snowWhite);
+        Arrays.fill(g2.getFaceColors(), snowWhite);
+        Arrays.fill(g3.getFaceColors(), snowWhite);
+        Arrays.fill(g1.getFaceTransparencies(), (byte) trans);
+        Arrays.fill(g2.getFaceTransparencies(), (byte) trans);
+        Arrays.fill(g3.getFaceTransparencies(), (byte) trans);
+        // Small (≈2-3 tile) discs and flat lighting. The flat lighting (very high ambient,
+        // very low contrast) prevents the cloud model's normals from shading the flattened
+        // disc gray — instead the disc renders as a uniform white patch.
+        snowGroundModel  = g1.scale(256, 1, 256).translate(0, -3, 0)
+            .light(240, 50, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        snowGroundModel2 = g2.scale(320, 1, 320).translate(0, -3, 0).rotateY90Ccw()
+            .light(240, 50, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+        snowGroundModel3 = g3.scale(288, 1, 288).translate(0, -3, 0).rotateY180Ccw()
+            .light(240, 50, ModelData.DEFAULT_X, ModelData.DEFAULT_Y, ModelData.DEFAULT_Z);
+    }
+
+    public Model getSnowGroundModel(int variant)
+    {
+        switch (variant)
+        {
+            default:
+            case 1: return snowGroundModel;
+            case 2: return snowGroundModel2;
+            case 3: return snowGroundModel3;
         }
     }
 

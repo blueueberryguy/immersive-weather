@@ -488,17 +488,41 @@ public class CyclesPlugin extends Plugin
 			clientThread.invoke(modelHandler::rebuildCloudShadowModels);
 		}
 
+		if (key.equals("snowAccumulationOpacity"))
+		{
+			clientThread.invoke(modelHandler::rebuildSnowGroundModels);
+		}
+
 		// Clearing or restoring shadows on toggle.
 		if (key.equals("enableCloudShadows"))
 		{
 			clientThread.invoke(() -> {
 				for (WeatherManager wm : weatherManagerList)
 				{
+					if (wm.getWeatherType() != Weather.CLOUDY && wm.getWeatherType() != Weather.PARTLY_CLOUDY)
+						continue;
 					for (WeatherObject wo : wm.getWeatherObjArray())
 					{
 						RuneLiteObject shadow = wo.getShadowObject();
 						if (shadow != null)
 							shadow.setActive(config.enableCloudShadows());
+					}
+				}
+			});
+		}
+
+		if (key.equals("enableSnowAccumulation"))
+		{
+			clientThread.invoke(() -> {
+				for (WeatherManager wm : weatherManagerList)
+				{
+					if (wm.getWeatherType() != Weather.SNOWY)
+						continue;
+					for (WeatherObject wo : wm.getWeatherObjArray())
+					{
+						RuneLiteObject accumulation = wo.getShadowObject();
+						if (accumulation != null)
+							accumulation.setActive(config.enableSnowAccumulation());
 					}
 				}
 			});
@@ -954,6 +978,20 @@ public class CyclesPlugin extends Plugin
 			shadow.setLocation(lp, plane);
 			shadow.setActive(true);
 			wo.setShadowObject(shadow);
+		}
+
+		// Snow gets a paired ground-accumulation disc — same WeatherObject "shadow" slot, just
+		// repurposed as a soft white dusting. As more flakes spawn the discs overlap to form a
+		// cumulative blanket of snow on whatever terrain you're standing on.
+		if (weather == Weather.SNOWY && config.enableSnowAccumulation())
+		{
+			RuneLiteObject accumulation = client.createRuneLiteObject();
+			accumulation.setModel(modelHandler.getSnowGroundModel(objectVariant));
+			accumulation.setRadius(0);
+			accumulation.setDrawFrontTilesFirst(false);
+			accumulation.setLocation(lp, plane);
+			accumulation.setActive(true);
+			wo.setShadowObject(accumulation);
 		}
 
 		return wo;

@@ -197,6 +197,31 @@ public interface CyclesConfig extends Config {
 	}
 
 	@ConfigItem(
+			keyName = "enableSnowAccumulation",
+			name = "Ground Snow Accumulation",
+			description = "Lays a thin white snow layer on the ground beneath snowfall, even in non-snowy biomes",
+			section = skySettings,
+			position = 9
+	)
+	default boolean enableSnowAccumulation()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+			keyName = "snowAccumulationOpacity",
+			name = "Snow Layer Opacity",
+			description = "How thickly snow appears to settle on the ground (low = light dusting, high = blanket of snow)",
+			section = skySettings,
+			position = 10
+	)
+	@Range(min = 5, max = 100)
+	default int snowAccumulationOpacity()
+	{
+		return 35;
+	}
+
+	@ConfigItem(
 			keyName = "weatherIntensity",
 			name = "Weather Intensity",
 			description = "Master intensity for rain/snow/storm look (also scales density, droplet length, sky darkness)",
