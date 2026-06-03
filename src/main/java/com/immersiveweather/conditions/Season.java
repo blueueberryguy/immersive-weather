@@ -1,4 +1,4 @@
-package com.weather3d.conditions;
+package com.immersiveweather.conditions;
 
 import lombok.Getter;
 import net.runelite.client.util.ImageUtil;

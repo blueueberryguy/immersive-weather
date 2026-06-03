@@ -1,8 +1,8 @@
-package com.weather3d;
+package com.immersiveweather;
 
-import com.weather3d.conditions.Biome;
-import com.weather3d.conditions.Season;
-import com.weather3d.conditions.Weather;
+import com.immersiveweather.conditions.Biome;
+import com.immersiveweather.conditions.Season;
+import com.immersiveweather.conditions.Weather;
 import net.runelite.api.Client;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.OverlayLayer;

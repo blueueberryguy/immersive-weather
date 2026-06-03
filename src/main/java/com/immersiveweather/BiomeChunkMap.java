@@ -1,6 +1,6 @@
-package com.weather3d;
+package com.immersiveweather;
 
-import com.weather3d.conditions.Biome;
+import com.immersiveweather.conditions.Biome;
 
 public enum BiomeChunkMap
 {

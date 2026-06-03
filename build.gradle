@@ -25,10 +25,18 @@ dependencies {
 	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
 }
 
-group = 'com.weather3d'
+group = 'com.immersiveweather'
 version = '1.2.7'
 sourceCompatibility = '1.9'
 
 tasks.withType(JavaCompile) {
 	options.encoding = 'UTF-8'
+}
+
+tasks.register('runRuneLite', JavaExec) {
+	group = 'application'
+	description = 'Launches the dev RuneLite client with the Immersive Weather plugin sideloaded'
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.immersiveweather.CyclesTest'
+	jvmArgs = ['-ea', '-Djava.net.preferIPv4Stack=true']
 }

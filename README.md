@@ -1,50 +1,83 @@
-# 3D Weather Plugin
-A plugin that gives immersive, 3D weather with dynamic weather cycles and ambience.
+# Immersive Weather
+A plugin that gives highly immersive, 3D weather with dynamic weather cycles, day/night, aurora, and ambience.
 
-Note that this plugin looks best when the colour of the skybox is changed through the default Skybox plugin.
-It looks even better with 117HD enabled!
+A fork of https://github.com/ScreteMonge/3D-Weather.
+
+## Changelog (vs. 3D Weather fork)
+
+### Sky & lighting
+- Plugin now drives the in-client skybox colour per weather (sunny, cloudy, rainy/stormy, snowy, foggy, ashfall, starry, aurora), easing between targets each frame.
+- Auto-disables RuneLite's stock Skybox plugin while running so the two don't fight over `setSkyboxColor`.
+- New full-screen weather tint overlay (darkens during rain/storm, brightens-foggy during snow, etc.).
+
+### Day / night cycle
+- New independent day↔night cycle on a real-time clock (default 12 minutes per full cycle).
+- Sky eases toward a deep night colour proportional to the cycle's light level and a `Night Darkness` slider.
+- Night darkening overlay layered above the scene so the world (not just the sky) actually dims at night.
+- Stars at night: an additive star manager spawns the starry weather objects regardless of the active weather while it's night.
+
+### Aurora
+- Stacks with the night-stars layer.
+- Tunable density and intensity.
+
+### Cloud changes
+- Cloud face colours blanket-filled (vs. recolouring only `faceColors[0]`), per-face translucency added, variant luminance tightened — fixes the "lumpy banded puff" look.
+- Clouds drift smoothly across the sky each client-tick with scene-edge wrap, instead of teleporting on the relocate cycle.
+- New cast ground shadows for clouds with tunable opacity.
+
+### Snow changes
+- Snow particle visual revised (Wintertodt ice-burst flattened with low-contrast lighting so it reads as a soft puff rather than a sparkly crystal).
+- New ground snow accumulation: paired flat white disc per snow particle, accumulates into a soft white dusting across the visible scene.
+- Accumulation respects building interiors via a 3×3 `TILE_FLAG_UNDER_ROOF` neighbourhood check so discs don't bleed into indoor floors.
+
+### Fog changes
+- Fog now uses the cloud model flattened wide-and-short (vs. the original fog model's vertical brushstrokes) — reads as a ground-hugging mist sheet.
+- Heavy per-face translucency + flat lighting + smaller patches so accumulating overlaps blend smoothly instead of stacking polygon edges.
+- Fog drifts slowly, same drift machinery as clouds at ~1/3 speed.
+- Spawn/relocate respect the same 3×3 roof check as snow accumulation, so fog stays outside buildings.
+
+### Rain changes
+- Default densities raised.
+- Streak heights roughly doubled and lengths vary per variant so the rain field reads as a curtain rather than a uniform grid.
+- Droplet colour brightened to read against dark stormy backdrops.
+
+### Intensity & defaults
+- New `Weather Intensity` master slider (LIGHT / MODERATE / HEAVY / EXTREME) drives sky darkness, screen tint strength, rain streak length, and precipitation density together.
+- New configs: `Sky & Lighting`, `Day & Night`, plus per-feature toggles (cloud shadows, snow accumulation, stars-at-night, aurora intensity & density, etc.).
+- Defaults flipped: `enableFog` and `enableAsh` now default on; `toggleOverlay` defaults off.
+
+### Underground / instanced area handling
+- Skybox override, night darkening, weather tint, and night-star auxiliary are all suppressed when the player is in a cave, lava cave, or any instanced region. The game's natural lighting comes back through.
+
+### Misc
+- Smoother stacking for cloud shadows, snow accumulation, and fog (ultra-translucent per-face so overlaps don't expose polygon edges).
 
 # Gallery
 
 ### Rainy/Stormy
 
-![Rain](https://imgur.com/cu2hAeR.gif)
+![Rain](https://i.imgur.com/rQ5Wa9e.png)
 
 ### Snowy
 
-![Snow](https://imgur.com/PwY4o34.gif)
+![Snow](https://i.imgur.com/DUsMjVI.png)
 
 ### Foggy
 
-![Fog](https://imgur.com/N5fG6v7.gif)
+![Fog](https://i.imgur.com/M9QG63A.png)
 
 ### Ashfall
 
-![Ashfall](https://imgur.com/39YGPgZ.gif)
+![Ashfall](https://i.imgur.com/e5GUWoQ.png)
 
 ### Starry
 
-![Stars](https://imgur.com/FmPmdoQ.gif)
+![Stars](https://i.imgur.com/SLzokWF.png)
 
 ### Cloudy/Partly Cloudy
 
-![Clouds](https://imgur.com/JtWUnKK.gif)
+![Clouds](https://i.imgur.com/9WSINrk.png)
 
-### Overlay Features
-
-Overlay:
-
-![Overlay](https://imgur.com/qP9EIVo.png)
-
-All Overlay options:
-
-![Conditions](https://imgur.com/T7nXnOL.png)
-
-
-
-# Config
-
-![Config](https://imgur.com/xeO1rEY.png)
 
 ### Weather Type & Season Type
 Weather can be manually set or dynamically self-regulated.
@@ -58,6 +91,13 @@ Naturally, Winter season will feature more frequent colder, precipitous Weathers
 Biome is determined by your chunk on the world map. 
 A chunk that is predominantly within the Desert region will therefore feature as a Desert Biome. 
 Note that this does result in some awkward gaps where a Biome may be applied to the edge of an area that is clearly a different Biome.
+
+### Day Cycle
+The sky cycles between day and night on a real-time clock, independent of weather.
+
+For Dynamic Day Cycle, the sky will automatically loop from day to night and back over a configurable Cycle Length (default 12 minutes), eased smoothly so dawn and dusk fade gradually rather than snapping.
+Time of Day can also be set manually — Day, Dusk, or Night — to preview a fixed light level or test how a given weather looks under a specific lighting state.
+Naturally, night dims the scene and lets stars appear in the sky; day brightens everything back up.
 
 
 ### Weather Density
