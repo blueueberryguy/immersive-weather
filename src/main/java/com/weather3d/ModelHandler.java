@@ -78,33 +78,48 @@ public class ModelHandler
         ashModel2 = ashModelData2.scale(128, 192, 128).translate(0, 180, 0).recolor(ashFaceColours2[0], ashColour1).recolor(ashFaceColours2[2], ashColour2).rotateY90Ccw().light();
         ashModel3 = ashModelData3.scale(128, 192, 128).translate(0, 180, 0).recolor(ashFaceColours3[0], ashColour1).recolor(ashFaceColours3[2], ashColour2).rotateY270Ccw().light();
 
-        // Clouds: bigger + softer shades so neighbours visually blend into a sheet rather than
-        // reading as obvious separate puff models. Three variants with slightly different
-        // tints / scales / rotations help avoid a tiled look.
+        // Clouds: the cache model has multiple distinct face colours out of the box, so
+        // recolouring only faceColors[0] (the original behaviour) left the rest as default
+        // shades — that's where the "lumpy banded puff" look came from. We blanket-fill every
+        // face colour to a single near-white per variant, keep the variants' luminances close
+        // together so neighbours don't read as dark vs bright blobs, and put mild per-face
+        // transparency on the *regular* variant (not just TP) so seams between touching clouds
+        // feather away instead of reading as polygon edges.
+        short cloudC1 = JagexColor.packHSL(40, 0, 115);
+        short cloudC2 = JagexColor.packHSL(40, 0, 112);
+        short cloudC3 = JagexColor.packHSL(40, 0, 108);
+
         ModelData cloudModelData = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
         ModelData cloudModelData2 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
         ModelData cloudModelData3 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
-        short cloudFaceColour = cloudModelData.getFaceColors()[0];
-        short cloudBright = JagexColor.packHSL(54, 0, 118);
-        short cloudMid    = JagexColor.packHSL(54, 1, 100);
-        short cloudShade  = JagexColor.packHSL(50, 2, 78);
-        cloudModel  = cloudModelData.scale(1100, 360, 1100).translate(0, -1300, 0).recolor(cloudFaceColour, cloudBright).light();
-        cloudModel2 = cloudModelData2.scale(1500, 480, 1500).translate(0, -1700, 0).recolor(cloudFaceColour, cloudMid).rotateY90Ccw().light();
-        cloudModel3 = cloudModelData3.scale(1300, 420, 1300).translate(0, -1500, 0).recolor(cloudFaceColour, cloudShade).rotateY180Ccw().light();
+        Arrays.fill(cloudModelData.getFaceColors(), cloudC1);
+        Arrays.fill(cloudModelData2.getFaceColors(), cloudC2);
+        Arrays.fill(cloudModelData3.getFaceColors(), cloudC3);
+        // Mild base translucency on regular clouds: enough to feather neighbouring polygon
+        // edges, not so much that distant cloud cover loses presence against the sky.
+        Arrays.fill(cloudModelData.getFaceTransparencies(), (byte) -45);
+        Arrays.fill(cloudModelData2.getFaceTransparencies(), (byte) -45);
+        Arrays.fill(cloudModelData3.getFaceTransparencies(), (byte) -45);
+        // Slightly bigger XZ + tighter altitude band so layers overlap heavily and read as a
+        // single sheet rather than a tiled grid of puffs.
+        cloudModel  = cloudModelData.scale(1500, 360, 1500).translate(0, -1400, 0).light();
+        cloudModel2 = cloudModelData2.scale(1700, 420, 1700).translate(0, -1500, 0).rotateY90Ccw().light();
+        cloudModel3 = cloudModelData3.scale(1600, 400, 1600).translate(0, -1450, 0).rotateY180Ccw().light();
 
+        // Close-camera variant: nearly invisible per-face so a cloud passing directly overhead
+        // doesn't slam into the player's face — just a faint tint of mist.
         ModelData cloudTPModelData = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
         ModelData cloudTPModelData2 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
         ModelData cloudTPModelData3 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
-        cloudModelTP  = cloudTPModelData.scale(1100, 360, 1100).translate(0, -1300, 0).recolor(cloudFaceColour, cloudBright).light();
-        cloudModelTP2 = cloudTPModelData2.scale(1500, 480, 1500).translate(0, -1700, 0).recolor(cloudFaceColour, cloudMid).rotateY90Ccw().light();
-        cloudModelTP3 = cloudTPModelData3.scale(1300, 420, 1300).translate(0, -1500, 0).recolor(cloudFaceColour, cloudShade).rotateY180Ccw().light();
-        byte[] cloudMDTP = cloudTPModelData.getFaceTransparencies();
-        byte[] cloudMDTP2 = cloudTPModelData2.getFaceTransparencies();
-        byte[] cloudMDTP3 = cloudTPModelData3.getFaceTransparencies();
-        // Higher (more transparent) so edges of overlapping clouds melt together.
-        Arrays.fill(cloudMDTP, (byte) -70);
-        Arrays.fill(cloudMDTP2, (byte) -70);
-        Arrays.fill(cloudMDTP3, (byte) -70);
+        Arrays.fill(cloudTPModelData.getFaceColors(), cloudC1);
+        Arrays.fill(cloudTPModelData2.getFaceColors(), cloudC2);
+        Arrays.fill(cloudTPModelData3.getFaceColors(), cloudC3);
+        cloudModelTP  = cloudTPModelData.scale(1500, 360, 1500).translate(0, -1400, 0).light();
+        cloudModelTP2 = cloudTPModelData2.scale(1700, 420, 1700).translate(0, -1500, 0).rotateY90Ccw().light();
+        cloudModelTP3 = cloudTPModelData3.scale(1600, 400, 1600).translate(0, -1450, 0).rotateY180Ccw().light();
+        Arrays.fill(cloudTPModelData.getFaceTransparencies(), (byte) -20);
+        Arrays.fill(cloudTPModelData2.getFaceTransparencies(), (byte) -20);
+        Arrays.fill(cloudTPModelData3.getFaceTransparencies(), (byte) -20);
 
         // Cloud ground shadows: same source model but flattened (tiny Y scale) and recoloured
         // near-black, so it lies on the floor like a soft splotch. Heavy transparency so it
@@ -126,17 +141,29 @@ public class ModelHandler
         Arrays.fill(fogTransparency2, (byte) -25);
         Arrays.fill(fogTransparency3, (byte) -25);
 
-        // Snow: the Wintertodt ice-burst animation only throws particles a short distance from
-        // the model origin, so over-lifting the origin makes flakes spawn above the visible
-        // frustum and never reach the ground. Instead, scale Y aggressively (so the bounding
-        // box covers from above the player's head down past the tile) and only nudge the origin
-        // up modestly so the apparent fall begins above head height and finishes at the floor.
-        ModelData snowModelData = client.loadModelData(SNOW_MODEL).cloneVertices();
-        ModelData snowModelData2 = client.loadModelData(SNOW_MODEL).cloneVertices();
-        ModelData snowModelData3 = client.loadModelData(SNOW_MODEL).cloneVertices();
-        snowModel  = snowModelData.scale(200, 900, 200).translate(0, -150, 0).light();
-        snowModel2 = snowModelData2.scale(200, 900, 200).translate(0, -150, 0).rotateY90Ccw().light();
-        snowModel3 = snowModelData3.scale(200, 900, 200).translate(0, -150, 0).rotateY270Ccw().light();
+        // Snow: back to the Wintertodt ice-burst model + animation (27835/7000) — the rain model
+        // approach was always going to read as rain because the geometry IS rain droplets, even
+        // when recoloured. The Wintertodt model produces little white puff particles which IS
+        // visually what snow looks like. Two changes vs. the very original code so it doesn't
+        // hug the floor like the user complained at the start:
+        //   1. Blanket-fill all face colours to a clean bright white (the original recolor()
+        //      only touched two indices; the rest stayed at the Wintertodt model's defaults).
+        //   2. Translate the model up so the burst origin sits at roughly head height instead
+        //      of below the tile, and scale aggressively up so flakes are clearly visible.
+        // Translation/scale both increase with weatherIntensity so HEAVY/EXTREME feels like a
+        // blizzard while LIGHT is a gentle dusting.
+        short snowWhite = JagexColor.packHSL(0, 0, 115);
+        ModelData snowModelData  = client.loadModelData(SNOW_MODEL).cloneVertices().cloneColors();
+        ModelData snowModelData2 = client.loadModelData(SNOW_MODEL).cloneVertices().cloneColors();
+        ModelData snowModelData3 = client.loadModelData(SNOW_MODEL).cloneVertices().cloneColors();
+        Arrays.fill(snowModelData.getFaceColors(),  snowWhite);
+        Arrays.fill(snowModelData2.getFaceColors(), snowWhite);
+        Arrays.fill(snowModelData3.getFaceColors(), snowWhite);
+        int snowScale = snowScaleFor();
+        int snowLift  = snowLiftFor();
+        snowModel  = snowModelData.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).light();
+        snowModel2 = snowModelData2.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).rotateY90Ccw().light();
+        snowModel3 = snowModelData3.scale(snowScale, snowScale, snowScale).translate(0, -snowLift, 0).rotateY270Ccw().light();
 
         // Rain: longer droplets + darker base colour. Length scales with global intensity.
         int rainYScale = rainHeightFor(false);
@@ -209,14 +236,19 @@ public class ModelHandler
     {
         int opacityCfg = config == null ? 25 : config.cloudShadowOpacity();
         // Face transparency byte is read unsigned: 0 = fully opaque, 255 = fully invisible.
-        // We want shadows to read as soft, atmospheric tints — never solid black blobs.
-        // Map opacity slider [5..100] onto unsigned [240..150] (i.e. byte [-16..-106]):
-        //   5%   → unsigned 240 (~94% transparent — a whisper of darkness)
-        //   25%  → unsigned 220 (~86% transparent — the new default, gentle WoW vibe)
-        //   100% → unsigned 150 (~59% transparent — distinct but never solid)
-        int unsigned = 240 - (int) ((opacityCfg / 100f) * 90);
+        // KEY INSIGHT: each shadow is one polygon-faced disc with uniform alpha per face. When
+        // two shadows overlap, you see (alpha_A + alpha_B), and the boundary between "A only"
+        // and "A+B" reads as a visible polygon edge — exactly the jagged stack the user saw.
+        //
+        // Fix: keep each individual shadow ULTRA-translucent so the per-shadow alpha is small
+        // enough that adding 2-3 together still produces a soft tint rather than a hard step.
+        // Map opacity slider [5..100] onto unsigned [250..205]:
+        //   5%   → 250 (~98% transparent — barely a whisper)
+        //   25%  → 239 (~93% transparent — default; only really shows where 2-3 stack)
+        //   100% → 205 (~80% transparent — distinct, never the black blob of an opaque disc)
+        int unsigned = 250 - (int) ((opacityCfg / 100f) * 45);
         if (unsigned > 255) unsigned = 255;
-        if (unsigned < 130) unsigned = 130;
+        if (unsigned < 180) unsigned = 180;
         int trans = unsigned > 127 ? unsigned - 256 : unsigned;
 
         ModelData s1 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
@@ -224,10 +256,12 @@ public class ModelHandler
         ModelData s3 = client.loadModelData(CLOUD_MODEL).cloneVertices().cloneColors().cloneTransparencies();
         short shadowFaceColour = s1.getFaceColors()[0];
         short shadowReplace = JagexColor.packHSL(0, 0, 0);
-        // Y scale ≈ 1 (flat); translate up a few units to sit just above the tile surface.
-        cloudShadowModel  = s1.scale(1100, 1, 1100).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).light();
-        cloudShadowModel2 = s2.scale(1500, 1, 1500).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).rotateY90Ccw().light();
-        cloudShadowModel3 = s3.scale(1300, 1, 1300).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).rotateY180Ccw().light();
+        // Significantly larger than the cloud disc so neighbouring shadows always overlap by
+        // a wide margin — that pushes the visible polygon edges far apart so what the player
+        // perceives is just the overlap *interior*, which is the soft uniform region.
+        cloudShadowModel  = s1.scale(2400, 1, 2400).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).light();
+        cloudShadowModel2 = s2.scale(2800, 1, 2800).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).rotateY90Ccw().light();
+        cloudShadowModel3 = s3.scale(2600, 1, 2600).translate(0, -2, 0).recolor(shadowFaceColour, shadowReplace).rotateY180Ccw().light();
         byte[] t1 = s1.getFaceTransparencies();
         byte[] t2 = s2.getFaceTransparencies();
         byte[] t3 = s3.getFaceTransparencies();
@@ -249,6 +283,40 @@ public class ModelHandler
             case MODERATE: return storm ? 410 : 256;
             case HEAVY:    return storm ? 560 : 360;
             case EXTREME:  return storm ? 760 : 500;
+        }
+    }
+
+    /** Uniform XYZ scale for the Wintertodt ice-burst snow puff per intensity. */
+    private int snowScaleFor()
+    {
+        if (config == null)
+        {
+            return 200;
+        }
+        switch (config.weatherIntensity())
+        {
+            case LIGHT:    return 160;
+            default:
+            case MODERATE: return 200;
+            case HEAVY:    return 240;
+            case EXTREME:  return 280;
+        }
+    }
+
+    /** How far above the tile the burst origin sits (lifts snow off the floor so it reads as drifting from above). */
+    private int snowLiftFor()
+    {
+        if (config == null)
+        {
+            return 150;
+        }
+        switch (config.weatherIntensity())
+        {
+            case LIGHT:    return 100;
+            default:
+            case MODERATE: return 150;
+            case HEAVY:    return 200;
+            case EXTREME:  return 250;
         }
     }
 

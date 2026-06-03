@@ -1,8 +1,7 @@
 # 3D Weather Plugin
-A plugin that gives immersive, 3D weather with dynamic weather cycles and ambience.
+A plugin that gives highly immersive, 3D weather with dynamic weather cycles and ambience.
 
-Note that this plugin looks best when the colour of the skybox is changed through the default Skybox plugin.
-It looks even better with 117HD enabled!
+A fork of https://github.com/ScreteMonge/3D-Weather.
 
 # Gallery
 
