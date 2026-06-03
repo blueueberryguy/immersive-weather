@@ -1,8 +1,8 @@
-package com.weather3d;
+package com.immersiveweather;
 
 import net.runelite.client.config.*;
 
-@ConfigGroup("3Dweather")
+@ConfigGroup("ImmersiveWeather")
 public interface CyclesConfig extends Config {
 
 	enum WeatherType {

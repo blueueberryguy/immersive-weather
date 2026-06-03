@@ -1,6 +1,6 @@
-package com.weather3d;
+package com.immersiveweather;
 
-import com.weather3d.conditions.Weather;
+import com.immersiveweather.conditions.Weather;
 import lombok.Getter;
 import net.runelite.api.*;
 

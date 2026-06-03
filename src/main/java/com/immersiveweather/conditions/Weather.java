@@ -1,6 +1,6 @@
-package com.weather3d.conditions;
+package com.immersiveweather.conditions;
 
-import com.weather3d.audio.SoundEffect;
+import com.immersiveweather.audio.SoundEffect;
 import lombok.Getter;
 import net.runelite.client.util.ImageUtil;
 

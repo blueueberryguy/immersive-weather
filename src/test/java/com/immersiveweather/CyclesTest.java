@@ -1,4 +1,4 @@
-package com.weather3d;
+package com.immersiveweather;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;

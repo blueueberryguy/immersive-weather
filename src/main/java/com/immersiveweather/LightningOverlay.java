@@ -1,4 +1,4 @@
-package com.weather3d;
+package com.immersiveweather;
 
 import net.runelite.api.Client;
 import net.runelite.client.ui.overlay.Overlay;

@@ -1,6 +1,6 @@
-package com.weather3d;
+package com.immersiveweather;
 
-import com.weather3d.conditions.Weather;
+import com.immersiveweather.conditions.Weather;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.events.BeforeRender;

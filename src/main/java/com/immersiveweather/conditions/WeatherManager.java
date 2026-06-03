@@ -1,7 +1,7 @@
-package com.weather3d.conditions;
+package com.immersiveweather.conditions;
 
-import com.weather3d.WeatherObject;
-import com.weather3d.audio.SoundPlayer;
+import com.immersiveweather.WeatherObject;
+import com.immersiveweather.audio.SoundPlayer;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;

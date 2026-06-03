@@ -1,12 +1,12 @@
-package com.weather3d;
+package com.immersiveweather;
 
 import com.google.inject.Provides;
-import com.weather3d.audio.SoundEffect;
-import com.weather3d.audio.SoundPlayer;
-import com.weather3d.conditions.Biome;
-import com.weather3d.conditions.Season;
-import com.weather3d.conditions.Weather;
-import com.weather3d.conditions.WeatherManager;
+import com.immersiveweather.audio.SoundEffect;
+import com.immersiveweather.audio.SoundPlayer;
+import com.immersiveweather.conditions.Biome;
+import com.immersiveweather.conditions.Season;
+import com.immersiveweather.conditions.Weather;
+import com.immersiveweather.conditions.WeatherManager;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -32,15 +32,15 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Random;
 
-import static com.weather3d.CyclesConfig.SeasonType.DYNAMIC;
-import static com.weather3d.CyclesConfig.SeasonType.HD_117;
-import static com.weather3d.audio.SoundEffect.*;
+import static com.immersiveweather.CyclesConfig.SeasonType.DYNAMIC;
+import static com.immersiveweather.CyclesConfig.SeasonType.HD_117;
+import static com.immersiveweather.audio.SoundEffect.*;
 
 @Slf4j
 @PluginDescriptor(
-	name = "3D Weather",
-	description = "Creates immersive 3D Weather with dynamic Weather cycles and ambience",
-	tags = {"immersion,", "weather", "ambience", "audio", "graphics"}
+	name = "Immersive Weather",
+	description = "Atmospheric weather with day/night cycle, aurora, ground accumulation, and dynamic skybox",
+	tags = {"immersion", "weather", "ambience", "audio", "graphics", "skybox", "day", "night", "aurora"}
 )
 public class CyclesPlugin extends Plugin
 {
@@ -73,6 +73,8 @@ public class CyclesPlugin extends Plugin
 
 	/** Tracks whether we toggled off the stock Skybox plugin so we can restore it on shutdown. */
 	private boolean stockSkyboxWasEnabled = false;
+	/** Tracks whether we toggled off the legacy "3D Weather" plugin (this plugin's upstream fork). */
+	private boolean legacy3DWeatherWasEnabled = false;
 
 	private final Random random = new Random();
 	private final ArrayList<WeatherManager> weatherManagerList = new ArrayList<>();
@@ -113,6 +115,7 @@ public class CyclesPlugin extends Plugin
 		skyboxController.reset();
 
 		toggleStockSkyboxIfNeeded(true);
+		toggleLegacy3DWeatherIfNeeded(true);
 
 		if (client.getLocalPlayer() != null)
 		{
@@ -135,6 +138,7 @@ public class CyclesPlugin extends Plugin
 		clientThread.invoke(() -> client.setSkyboxColor(0));
 
 		restoreStockSkybox();
+		restoreLegacy3DWeather();
 	}
 
 	@Subscribe
@@ -422,7 +426,7 @@ public class CyclesPlugin extends Plugin
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (!event.getGroup().equals("3Dweather"))
+		if (!event.getGroup().equals("ImmersiveWeather"))
 			return;
 
 		if (client.getGameState() != GameState.LOGGED_IN)
@@ -1630,6 +1634,70 @@ public class CyclesPlugin extends Plugin
 			}
 		});
 		stockSkyboxWasEnabled = false;
+	}
+
+	/**
+	 * If the original "3D Weather" plugin (this plugin's upstream fork) is installed and
+	 * enabled, turn it off — both plugins target the same scene with the same RuneLiteObject
+	 * particle pool and would render duplicate/conflicting weather. Remember the prior state
+	 * so we restore it on shutdown.
+	 */
+	private void toggleLegacy3DWeatherIfNeeded(boolean takingOver)
+	{
+		Plugin legacy = findPluginByName("3D Weather");
+		if (legacy == null)
+			return;
+
+		if (takingOver && pluginManager.isPluginEnabled(legacy))
+		{
+			legacy3DWeatherWasEnabled = true;
+			final Plugin toStop = legacy;
+			SwingUtilities.invokeLater(() -> {
+				try
+				{
+					pluginManager.setPluginEnabled(toStop, false);
+					pluginManager.stopPlugin(toStop);
+				}
+				catch (Exception e)
+				{
+					log.warn("Failed to stop legacy 3D Weather plugin", e);
+				}
+			});
+		}
+	}
+
+	private void restoreLegacy3DWeather()
+	{
+		if (!legacy3DWeatherWasEnabled)
+			return;
+
+		Plugin legacy = findPluginByName("3D Weather");
+		if (legacy == null)
+			return;
+
+		final Plugin toStart = legacy;
+		SwingUtilities.invokeLater(() -> {
+			try
+			{
+				pluginManager.setPluginEnabled(toStart, true);
+				pluginManager.startPlugin(toStart);
+			}
+			catch (Exception e)
+			{
+				log.warn("Failed to re-enable legacy 3D Weather plugin", e);
+			}
+		});
+		legacy3DWeatherWasEnabled = false;
+	}
+
+	private Plugin findPluginByName(String descriptorName)
+	{
+		return pluginManager.getPlugins().stream()
+			.filter(p -> {
+				PluginDescriptor d = p.getClass().getAnnotation(PluginDescriptor.class);
+				return d != null && descriptorName.equals(d.name());
+			})
+			.findFirst().orElse(null);
 	}
 
 	@Provides

@@ -1,4 +1,4 @@
-package com.weather3d;
+package com.immersiveweather;
 
 import lombok.Getter;
 import lombok.Setter;

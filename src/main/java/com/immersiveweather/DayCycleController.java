@@ -1,4 +1,4 @@
-package com.weather3d;
+package com.immersiveweather;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
